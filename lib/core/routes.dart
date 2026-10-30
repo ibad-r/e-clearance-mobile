@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../features/auth/screens/login_screen.dart';
 import '../features/clearance/screens/dashboard_screen.dart';
+import '../features/clearance/screens/new_clearance_screen.dart';
+import '../features/clearance/screens/review_screen.dart';
 
 class AppRoutes {
   static const login = '/';
@@ -14,8 +16,11 @@ class AppRoutes {
   static Map<String, WidgetBuilder> get table => {
     login: (_) => const LoginScreen(),
     dashboard: (_) => const DashboardScreen(),
-    newClearance: (_) => const Scaffold(
-      body: Center(child: Text('m03 coming next')),
+    newClearance: (_) => const NewClearanceScreen(),
+    review: (_) => const ReviewScreen(),
+    // Temporary page. We replace it when we build m05.
+    success: (_) => const Scaffold(
+      body: Center(child: Text('m05 coming next')),
     ),
   };
 }

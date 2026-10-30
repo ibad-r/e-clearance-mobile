@@ -16,9 +16,18 @@ class ClearanceDraft {
   DateTime? lastWorkingDay;
   String? reason;
   String phone = '';
-  String email = '';
+  String forwardingAddress = '';
   String remarks = '';
   bool confirmed = false;
+
+  void clear() {
+    lastWorkingDay = null;
+    reason = null;
+    phone = '';
+    forwardingAddress = '';
+    remarks = '';
+    confirmed = false;
+  }
 }
 
 class ClearanceRequest {
@@ -27,7 +36,7 @@ class ClearanceRequest {
   final DateTime lastWorkingDay;
   final String reason;
   final String phone;
-  final String email;
+  final String forwardingAddress;
   final String remarks;
   final List<DepartmentStep> steps;
 
@@ -37,7 +46,7 @@ class ClearanceRequest {
     required this.lastWorkingDay,
     required this.reason,
     required this.phone,
-    required this.email,
+    required this.forwardingAddress,
     required this.remarks,
     required this.steps,
   });

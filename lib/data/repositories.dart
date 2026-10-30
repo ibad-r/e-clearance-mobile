@@ -1,4 +1,5 @@
 import '../models/employee.dart';
+import '../models/clearance_request.dart';
 
 class AuthException implements Exception {
   final String message;
@@ -7,6 +8,10 @@ class AuthException implements Exception {
 
 abstract class AuthRepository {
   Future<Employee> login(String email, String password);
+}
+
+abstract class ClearanceRepository {
+  Future<ClearanceRequest> submit(ClearanceDraft draft);
 }
 
 class MockAuthRepository implements AuthRepository {
@@ -22,6 +27,36 @@ class MockAuthRepository implements AuthRepository {
       email: email,
       department: 'Faculty of Computing',
       designation: 'Lecturer',
+      joiningDate: '01 September 2022',
+    );
+  }
+}
+
+class MockClearanceRepository implements ClearanceRepository {
+  @override
+  Future<ClearanceRequest> submit(ClearanceDraft draft) async {
+    await Future.delayed(const Duration(seconds: 1));
+    return ClearanceRequest(
+      id: 'CLR-2026-0001',
+      submittedAt: DateTime.now(),
+      lastWorkingDay: draft.lastWorkingDay!,
+      reason: draft.reason!,
+      phone: draft.phone,
+      forwardingAddress: draft.forwardingAddress,
+      remarks: draft.remarks,
+      // Placeholder departments. We will match them to Figma on m07.
+      steps: const [
+        DepartmentStep(
+            department: 'Library', status: StepStatus.cleared),
+        DepartmentStep(
+            department: 'IT Department', status: StepStatus.processing),
+        DepartmentStep(
+            department: 'Finance',
+            status: StepStatus.outstanding,
+            note: 'Pending dues'),
+        DepartmentStep(
+            department: 'Human Resources', status: StepStatus.locked),
+      ],
     );
   }
 }
