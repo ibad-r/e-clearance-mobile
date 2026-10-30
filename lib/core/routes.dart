@@ -3,6 +3,8 @@ import '../features/auth/screens/login_screen.dart';
 import '../features/clearance/screens/dashboard_screen.dart';
 import '../features/clearance/screens/new_clearance_screen.dart';
 import '../features/clearance/screens/review_screen.dart';
+import '../features/clearance/screens/success_screen.dart';
+import '../features/clearance/screens/progress_screen.dart';
 
 class AppRoutes {
   static const login = '/';
@@ -18,9 +20,7 @@ class AppRoutes {
     dashboard: (_) => const DashboardScreen(),
     newClearance: (_) => const NewClearanceScreen(),
     review: (_) => const ReviewScreen(),
-    // Temporary page. We replace it when we build m05.
-    success: (_) => const Scaffold(
-      body: Center(child: Text('m05 coming next')),
-    ),
+    success: (_) => const SuccessScreen(),
+    progress: (_) => const ProgressScreen(),
   };
 }

@@ -1,4 +1,4 @@
-import '../models/employee.dart';
+﻿import '../models/employee.dart';
 import '../models/clearance_request.dart';
 
 class AuthException implements Exception {
@@ -44,18 +44,22 @@ class MockClearanceRepository implements ClearanceRepository {
       phone: draft.phone,
       forwardingAddress: draft.forwardingAddress,
       remarks: draft.remarks,
-      // Placeholder departments. We will match them to Figma on m07.
+      // Mock data only. The backend will replace this later.
       steps: const [
         DepartmentStep(
-            department: 'Library', status: StepStatus.cleared),
+          department: 'Finance',
+          status: StepStatus.outstanding,
+          note: 'Outstanding balance',
+          amountDue: 4500,
+        ),
         DepartmentStep(
-            department: 'IT Department', status: StepStatus.processing),
+            department: 'Information Services / Library',
+            status: StepStatus.locked),
         DepartmentStep(
-            department: 'Finance',
-            status: StepStatus.outstanding,
-            note: 'Pending dues'),
+            department: 'Computer Services', status: StepStatus.locked),
+        DepartmentStep(department: 'Store', status: StepStatus.locked),
         DepartmentStep(
-            department: 'Human Resources', status: StepStatus.locked),
+            department: 'HOD Clearance', status: StepStatus.locked),
       ],
     );
   }
