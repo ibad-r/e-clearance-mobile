@@ -1,4 +1,6 @@
+
 import 'package:flutter/foundation.dart';
+
 import '../models/employee.dart';
 import '../models/clearance_request.dart';
 import '../data/clearance_repository.dart';
@@ -36,7 +38,7 @@ class AppState extends ChangeNotifier {
   /// Becomes true when the server says the login token has expired.
   bool sessionExpired = false;
 
-  /// True while a submit request is running. Prevents duplicate submissions.
+  /// True while a submit request is running.
   bool _submitting = false;
   bool get isSubmitting => _submitting;
 
@@ -47,25 +49,29 @@ class AppState extends ChangeNotifier {
 
   Future<void> login(String email, String password) async {
     final user = await _auth.login(email: email, password: password);
+
     try {
       final profile = await _profile.getProfile();
       employee = Employee.fromProfile(profile, email: user.email);
     } catch (_) {
-      // Never stay half logged in.
       await _auth.logout();
       rethrow;
     }
+
     sessionExpired = false;
     await _loadCasesQuietly();
     notifyListeners();
   }
 
-  /// Call when the app starts. Returns true if a saved session is still valid.
+  /// Call when the app starts.
+  /// Returns true if a saved session is still valid.
   Future<bool> restoreSession() async {
     final user = await _auth.restoreSession();
     if (user == null) return false;
+
     final profile = await _profile.getProfile();
     employee = Employee.fromProfile(profile, email: user.email);
+
     sessionExpired = false;
     await _loadCasesQuietly();
     notifyListeners();
@@ -73,11 +79,11 @@ class AppState extends ChangeNotifier {
   }
 
   /// Loads the employee's cases from the backend.
-  /// Call this when the Progress or Dashboard screen opens.
   Future<void> refreshCases() async {
     final cases = await _clearance.listCases();
     final open = cases.where((c) => c.status != 'CANCELLED').toList();
     open.sort((a, b) => _time(b).compareTo(_time(a)));
+
     activeRequest = open.isEmpty ? null : open.first;
     casesError = null;
     notifyListeners();
@@ -91,6 +97,7 @@ class AppState extends ChangeNotifier {
       final cases = await _clearance.listCases();
       final open = cases.where((c) => c.status != 'CANCELLED').toList();
       open.sort((a, b) => _time(b).compareTo(_time(a)));
+
       activeRequest = open.isEmpty ? null : open.first;
       casesError = null;
     } on ApiException catch (e) {
@@ -98,14 +105,15 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Reloads the current case from GET /employee/cases/:caseId.
-  /// If no case is known yet, loads the list instead.
+  /// Reloads the current case from the backend.
   Future<void> refreshActiveCase() async {
     final current = activeRequest;
+
     if (current == null) {
       await refreshCases();
       return;
     }
+
     activeRequest = await _clearance.getCase(current.caseId);
     casesError = null;
     notifyListeners();
@@ -131,12 +139,14 @@ class AppState extends ChangeNotifier {
     draft.clear();
   }
 
-  /// Sends the request to the backend. The case only exists after the
-  /// server confirms it. Any error is thrown to the screen.
+  /// Sends the request to the backend.
+  /// The case only exists after the server confirms it.
   Future<void> submit() async {
     if (_submitting) return;
+
     _submitting = true;
     notifyListeners();
+
     try {
       activeRequest = await _clearance.submit(draft);
       draft.clear();

@@ -1,5 +1,7 @@
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../../core/app_state.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/routes.dart';
@@ -17,6 +19,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _password = TextEditingController();
+
   bool _obscure = true;
   bool _loading = false;
   String? _error;
@@ -30,32 +33,47 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submit() async {
     FocusScope.of(context).unfocus();
+
     if (!_formKey.currentState!.validate()) return;
+
     setState(() {
       _loading = true;
       _error = null;
     });
+
     try {
-      await context.read<AppState>().login(_email.text.trim(), _password.text);
+      await context.read<AppState>().login(
+            _email.text.trim(),
+            _password.text,
+          );
+
       if (!mounted) return;
+
       Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
     } on ApiException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) {
+        setState(() => _error = e.message);
+      }
     } catch (_) {
       if (mounted) {
         setState(() => _error = 'Something went wrong. Please try again.');
       }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   String? _validateEmail(String? v) {
     final value = v?.trim() ?? '';
+
     if (value.isEmpty) return 'Email is required';
+
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value)) {
       return 'Enter a valid email address';
     }
+
     return null;
   }
 
@@ -83,8 +101,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: AppTheme.primary,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.verified_user_outlined,
-                      color: Colors.white),
+                  child: const Icon(
+                    Icons.verified_user_outlined,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 const Text(
@@ -98,7 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 8),
                 const Text(
                   'Riphah International University · Faculty of Computing. '
-                      'Sign in to track your employee clearance.',
+                  'Sign in to track your employee clearance.',
                   style: TextStyle(
                     fontSize: 13,
                     height: 1.45,
@@ -127,21 +147,31 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: InputDecoration(
                     prefixIcon: const Icon(Icons.lock_outline, size: 20),
                     suffixIcon: IconButton(
-                      icon: Icon(_obscure
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined),
-                      onPressed: () => setState(() => _obscure = !_obscure),
+                      icon: Icon(
+                        _obscure
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                      onPressed: () {
+                        setState(() => _obscure = !_obscure);
+                      },
                     ),
                   ),
                 ),
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: () => ScaffoldMessenger.of(context)
-                        .showSnackBar(const SnackBar(
-                        content: Text('Not available in this demo'))),
-                    child: const Text('Forgot password?',
-                        style: TextStyle(fontSize: 12)),
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Not available in this demo'),
+                        ),
+                      );
+                    },
+                    child: const Text(
+                      'Forgot password?',
+                      style: TextStyle(fontSize: 12),
+                    ),
                   ),
                 ),
                 if (_error != null)
@@ -152,12 +182,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: BoxDecoration(
                       color: const Color(0xFFFEF2F2),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFFECACA)),
+                      border: Border.all(
+                        color: const Color(0xFFFECACA),
+                      ),
                     ),
                     child: Text(
                       _error!,
                       style: const TextStyle(
-                          color: AppTheme.danger, fontSize: 13),
+                        color: AppTheme.danger,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 PrimaryButton(
@@ -169,9 +203,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 const Center(
                   child: Text(
                     'Use your university-issued email. Contact IT support '
-                        'if you cannot sign in.',
+                    'if you cannot sign in.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppTheme.textMuted,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 28),
@@ -180,19 +217,26 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: BoxDecoration(
                     color: AppTheme.infoBg,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFD3DEF8)),
+                    border: Border.all(
+                      color: const Color(0xFFD3DEF8),
+                    ),
                   ),
                   child: const Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.verified_user_outlined,
-                          size: 16, color: AppTheme.primary),
+                      Icon(
+                        Icons.verified_user_outlined,
+                        size: 16,
+                        color: AppTheme.primary,
+                      ),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Sign in with the account provided for you.',
                           style: TextStyle(
-                              fontSize: 12, color: AppTheme.primary),
+                            fontSize: 12,
+                            color: AppTheme.primary,
+                          ),
                         ),
                       ),
                     ],
@@ -209,6 +253,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
 class _Label extends StatelessWidget {
   final String text;
+
   const _Label(this.text);
 
   @override

@@ -1,38 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/app_state.dart';
-import '../../../core/date_format.dart';
 import '../../../core/routes.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../models/clearance_request.dart';
 
 class SuccessScreen extends StatelessWidget {
   const SuccessScreen({super.key});
 
-  /// Turns the backend status (for example IN_PROGRESS) into readable text.
-  String _statusLabel(String status) {
-    switch (status) {
-      case 'IN_PROGRESS':
-        return 'In Progress';
-      case 'PENDING_SUBMISSION':
-        return 'Pending Submission';
-      case 'ACTION_REQUIRED':
-        return 'Action Required';
-      case 'AWAITING_APPROVAL':
-        return 'Awaiting Approval';
-      case 'RETURNED_FOR_CORRECTION':
-        return 'Returned for Correction';
-      case 'COMPLETED':
-        return 'Completed';
-      case 'CANCELLED':
-        return 'Cancelled';
-      default:
-        return status.isEmpty ? '—' : status.replaceAll('_', ' ');
+  String _statusLabel(List<DepartmentStep> steps) {
+    if (steps.isNotEmpty &&
+        steps.every((s) => s.status == StepStatus.cleared)) {
+      return 'Cleared';
     }
+    return 'Processing';
   }
 
   @override
   Widget build(BuildContext context) {
     final request = context.watch<AppState>().activeRequest;
+    final steps = request?.steps ?? const <DepartmentStep>[];
+    final current = request?.currentStep;
 
     // The user cannot go back to the Review screen after submitting.
     return PopScope(
@@ -59,7 +47,7 @@ class SuccessScreen extends StatelessWidget {
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 36),
                     child: Text(
-                      'Request submitted successfully',
+                      'Details submitted successfully',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 22,
@@ -73,8 +61,7 @@ class SuccessScreen extends StatelessWidget {
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 36),
                     child: Text(
-                      'Your clearance request has been recorded. You can '
-                          'track its status at any time.',
+                      'Your clearance has entered the automatic workflow.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                           fontSize: 12.5,
@@ -93,7 +80,7 @@ class SuccessScreen extends StatelessWidget {
                     child: Column(
                       children: [
                         _InfoRow(
-                          label: 'Request Code',
+                          label: 'Request ID',
                           child: Text(
                             request?.id ?? '—',
                             style: const TextStyle(
@@ -104,41 +91,29 @@ class SuccessScreen extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const _Divider(),
-                        _InfoRow(
-                          label: 'Case ID',
-                          child: Flexible(
-                            child: Text(
-                              request?.caseId ?? '—',
-                              textAlign: TextAlign.right,
-                              style: const TextStyle(
-                                fontFamily: 'monospace',
-                                fontSize: 10.5,
-                                color: AppTheme.textMuted,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const _Divider(),
+                        const Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: Color(0xFFF1F4F8)),
                         _InfoRow(
                           label: 'Status',
-                          child: _StatusBadge(
-                              _statusLabel(request?.status ?? '')),
+                          child: _StatusBadge(_statusLabel(steps)),
                         ),
-                        if (request?.submittedAt != null) ...[
-                          const _Divider(),
-                          _InfoRow(
-                            label: 'Submitted',
-                            child: Text(
-                              formatDateTime(request!.submittedAt!),
-                              style: const TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.textDark,
-                              ),
+                        const Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: Color(0xFFF1F4F8)),
+                        _InfoRow(
+                          label: 'Current Stage',
+                          child: Text(
+                            current?.department ?? '—',
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.textDark,
                             ),
                           ),
-                        ],
+                        ),
                       ],
                     ),
                   ),
@@ -196,14 +171,6 @@ class SuccessScreen extends StatelessWidget {
   }
 }
 
-class _Divider extends StatelessWidget {
-  const _Divider();
-
-  @override
-  Widget build(BuildContext context) =>
-      const Divider(height: 1, thickness: 1, color: Color(0xFFF1F4F8));
-}
-
 class _InfoRow extends StatelessWidget {
   final String label;
   final Widget child;
@@ -220,7 +187,6 @@ class _InfoRow extends StatelessWidget {
           style:
           const TextStyle(fontSize: 12.5, color: AppTheme.textMuted),
         ),
-        const SizedBox(width: 16),
         child,
       ],
     ),

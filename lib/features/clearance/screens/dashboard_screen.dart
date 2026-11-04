@@ -1,58 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/app_state.dart';
-import '../../../core/network/api_exception.dart';
 import '../../../core/routes.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
 import 'active_dashboard_screen.dart';
 
-class DashboardScreen extends StatefulWidget {
+class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
-
-  @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
-}
-
-class _DashboardScreenState extends State<DashboardScreen> {
-  bool _refreshing = true;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    // Always check the backend for the employee's case when this opens.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
-  }
-
-  Future<void> _refresh() async {
-    if (!mounted) return;
-    final state = context.read<AppState>();
-    setState(() {
-      _refreshing = true;
-      _error = null;
-    });
-    String? error;
-    try {
-      await state.refreshCases();
-    } on ApiException catch (e) {
-      error = e.message;
-    } catch (_) {
-      error = 'Could not load your clearance. Please try again.';
-    }
-    if (!mounted) return;
-    setState(() {
-      _refreshing = false;
-      _error = error;
-    });
-  }
-
-  String get _greeting {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning,';
-    if (hour < 17) return 'Good afternoon,';
-    return 'Good evening,';
-  }
 
   String _initials(String name) {
     final parts =
@@ -67,6 +22,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final state = context.watch<AppState>();
 
     // When the backend has a case for this employee, show the active view.
+    // After submitting, the dashboard switches to the active view.
     if (state.hasActiveRequest) {
       return const ActiveDashboardScreen();
     }
@@ -79,32 +35,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            if (_refreshing) ...[
-              const LinearProgressIndicator(minHeight: 2),
-              const SizedBox(height: 10),
-            ],
-            if (_error != null) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFEF2F2),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFFECACA)),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(_error!,
-                          style: const TextStyle(
-                              color: AppTheme.danger, fontSize: 12.5)),
-                    ),
-                    TextButton(
-                        onPressed: _refresh, child: const Text('Retry')),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-            ],
             Row(
               children: [
                 CircleAvatar(
@@ -121,8 +51,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_greeting,
-                          style: const TextStyle(
+                      const Text('Good morning,',
+                          style: TextStyle(
                               fontSize: 12, color: AppTheme.textMuted)),
                       Text(name,
                           style: const TextStyle(
@@ -183,7 +113,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           fontWeight: FontWeight.w700,
                           letterSpacing: 0.5)),
                   const SizedBox(height: 8),
-                  const Text('Start your clearance request',
+                  const Text('Start your clearance in under 2 minutes',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 22,
@@ -191,8 +121,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           fontWeight: FontWeight.w800)),
                   const SizedBox(height: 8),
                   const Text(
-                      'Your details are pre-filled from your employee record. '
-                          'Submit one request and track its status here.',
+                      'Your details are pre-filled. Departments are checked '
+                          'automatically for you.',
                       style: TextStyle(
                           color: Color(0xFFE3EAFB), fontSize: 12, height: 1.4)),
                   const SizedBox(height: 16),
@@ -203,16 +133,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: AppTheme.primary,
-                        disabledBackgroundColor: const Color(0xFFD3DEF8),
-                        disabledForegroundColor: AppTheme.primary,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                       ),
-                      // Disabled while we check the backend, so a second
-                      // request cannot be started by mistake.
-                      onPressed: _refreshing
-                          ? null
-                          : () => Navigator.pushNamed(
+                      onPressed: () => Navigator.pushNamed(
                           context, AppRoutes.newClearance),
                       iconAlignment: IconAlignment.end,
                       icon: const Icon(Icons.arrow_forward, size: 18),
@@ -234,10 +158,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: const Column(
                 children: [
                   _Step(1, 'Submit one online request'),
-                  _Step(2, 'Departments review your request and record '
-                      'their status'),
-                  _Step(3, 'Resolve any outstanding issue with the department'),
-                  _Step(4, 'Final approval completes your clearance'),
+                  _Step(2,
+                      'Departments are checked automatically, one at a time'),
+                  _Step(3, 'Resolve any outstanding issue'),
+                  _Step(4, 'Final approval, then your digital certificate'),
                 ],
               ),
             ),

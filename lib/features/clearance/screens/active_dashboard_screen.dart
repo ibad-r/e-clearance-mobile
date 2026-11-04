@@ -271,7 +271,7 @@ class ActiveDashboardScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          request.submittedAt == null ? 'Submission time not available' : formatDateTime(request.submittedAt!),
+                          formatDateTime(request.submittedAt),
                           style: const TextStyle(
                               fontSize: 11.5, color: AppTheme.textMuted),
                         ),

@@ -26,6 +26,8 @@ class _NewClearanceScreenState extends State<NewClearanceScreen> {
 
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _date;
+  late final TextEditingController _phone;
+  late final TextEditingController _address;
   late final TextEditingController _remarks;
 
   @override
@@ -35,12 +37,16 @@ class _NewClearanceScreenState extends State<NewClearanceScreen> {
     final d = context.read<AppState>().draft;
     _date = TextEditingController(
         text: d.lastWorkingDay == null ? '' : formatShortDate(d.lastWorkingDay!));
+    _phone = TextEditingController(text: d.phone);
+    _address = TextEditingController(text: d.forwardingAddress);
     _remarks = TextEditingController(text: d.remarks);
   }
 
   @override
   void dispose() {
     _date.dispose();
+    _phone.dispose();
+    _address.dispose();
     _remarks.dispose();
     super.dispose();
   }
@@ -63,6 +69,16 @@ class _NewClearanceScreenState extends State<NewClearanceScreen> {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
     Navigator.pushNamed(context, AppRoutes.review);
+  }
+
+  // Optional field: empty is fine, but if typed it must look like a phone.
+  String? _validatePhone(String? v) {
+    final value = v?.trim() ?? '';
+    if (value.isEmpty) return null;
+    if (!RegExp(r'^\+?[0-9 ]{10,15}$').hasMatch(value)) {
+      return 'Enter a valid phone number';
+    }
+    return null;
   }
 
   OutlineInputBorder _border(Color color, {double width = 1}) {
@@ -180,6 +196,29 @@ class _NewClearanceScreenState extends State<NewClearanceScreen> {
                 validator: (v) => v == null ? 'Please select a reason' : null,
                 decoration: _deco('Select reason', vertical: 12),
               ),
+              const SizedBox(height: 16),
+              const _Label('Contact Number'),
+              TextFormField(
+                controller: _phone,
+                keyboardType: TextInputType.phone,
+                textInputAction: TextInputAction.next,
+                style: _inputStyle,
+                onChanged: (v) => draft.phone = v,
+                validator: _validatePhone,
+                decoration:
+                _deco('+92 300 0000142', prefix: Icons.phone_outlined),
+              ),
+              const _Helper('Optional. Used only for clearance follow-up.'),
+              const SizedBox(height: 16),
+              const _Label('Forwarding Address'),
+              TextFormField(
+                controller: _address,
+                textInputAction: TextInputAction.next,
+                style: _inputStyle,
+                onChanged: (v) => draft.forwardingAddress = v,
+                decoration: _deco('Optional'),
+              ),
+              const _Helper('Optional. Where final documents can be sent.'),
               const SizedBox(height: 16),
               const _Label('Remarks', suffix: '(optional)'),
               TextFormField(
