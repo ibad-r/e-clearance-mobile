@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/app_state.dart';
 import '../../../core/date_format.dart';
@@ -271,7 +271,7 @@ class ActiveDashboardScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          formatDateTime(request.submittedAt),
+                          request.submittedAt == null ? 'Submission time not available' : formatDateTime(request.submittedAt!),
                           style: const TextStyle(
                               fontSize: 11.5, color: AppTheme.textMuted),
                         ),
