@@ -98,6 +98,19 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Reloads the current case from GET /employee/cases/:caseId.
+  /// If no case is known yet, loads the list instead.
+  Future<void> refreshActiveCase() async {
+    final current = activeRequest;
+    if (current == null) {
+      await refreshCases();
+      return;
+    }
+    activeRequest = await _clearance.getCase(current.caseId);
+    casesError = null;
+    notifyListeners();
+  }
+
   Future<void> logout() async {
     await _auth.logout();
     _clearLocalData();
