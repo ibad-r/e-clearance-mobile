@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/app_state.dart';
 import '../../../core/date_format.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/routes.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -17,6 +18,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
   bool _submitting = false;
 
   Future<void> _submit() async {
+    // Blocks a second tap while the first request is still running.
+    if (_submitting) return;
     setState(() => _submitting = true);
     try {
       await context.read<AppState>().submit();
@@ -26,15 +29,21 @@ class _ReviewScreenState extends State<ReviewScreen> {
         AppRoutes.success,
         ModalRoute.withName(AppRoutes.dashboard),
       );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      _showError(e.message);
     } catch (_) {
       if (!mounted) return;
       setState(() => _submitting = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not submit your request. Please try again.'),
-        ),
-      );
+      _showError('Could not submit your request. Please try again.');
     }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -88,10 +97,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   lastDay == null ? 'Not provided' : formatLongDate(lastDay)),
               _DetailRow('Reason for Leaving',
                   _valueOr(draft.reason, 'Not provided')),
-              _DetailRow(
-                  'Contact Number', _valueOr(draft.phone, 'Not provided')),
-              _DetailRow('Forwarding Address',
-                  _valueOr(draft.forwardingAddress, 'Not provided')),
               _DetailRow('Remarks', _valueOr(draft.remarks, 'None')),
             ]),
             const SizedBox(height: 20),
@@ -151,9 +156,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'After submission, the system checks each configured '
-                          'department automatically, in sequence. You cannot '
-                          'clear any department yourself.',
+                      'After submission, you can track the progress of your '
+                          'clearance from the dashboard. You cannot clear any '
+                          'department yourself.',
                       style: TextStyle(
                           fontSize: 12.5,
                           height: 1.45,
