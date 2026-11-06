@@ -65,7 +65,11 @@ class AuthRepository {
     _api.authToken = token;
     try {
       final data = await _api.get('/auth/me');
-      currentUser = AuthUser.fromJson(Map<String, dynamic>.from(data as Map));
+      if (data is! Map || data['user'] is! Map) {
+        throw ApiException(message: 'Unexpected response from the server.');
+      }
+      currentUser = AuthUser.fromJson(
+          Map<String, dynamic>.from(data['user'] as Map));
       return currentUser;
     } on ApiException catch (e) {
       if (e.isUnauthorized) {

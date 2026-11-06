@@ -426,6 +426,19 @@ void main() {
       );
     });
 
+    test('Logout button clears state and logs user out', () async {
+      final backend = _FakeBackend();
+      final state = backend.newState();
+      await state.login(_email, _password);
+      expect(state.employee, isNotNull);
+
+      await state.logout();
+
+      expect(state.employee, isNull);
+      expect(state.activeRequest, isNull);
+      expect(state.draft.lastWorkingDay, isNull);
+    });
+
     test('a server error (500) is reported as a server error', () async {
       final api = ApiClient(
         httpClient: MockClient(

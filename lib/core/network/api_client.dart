@@ -10,9 +10,10 @@ import 'api_exception.dart';
 class ApiClient {
   ApiClient({
     http.Client? httpClient,
-    this.baseUrl = ApiConfig.baseUrl,
-    this.timeout = const Duration(seconds: 15),
-  }) : _http = httpClient ?? http.Client();
+    String? baseUrl,
+    this.timeout = const Duration(seconds: 30),
+  })  : _http = httpClient ?? http.Client(),
+        baseUrl = baseUrl ?? ApiConfig.baseUrl;
 
   final http.Client _http;
   final String baseUrl;
