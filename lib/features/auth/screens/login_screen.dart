@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/app_state.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/routes.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/primary_button.dart';
-import '../../../data/repositories.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,8 +15,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _email = TextEditingController(text: 'ahsan.khan@demo.riphah.edu');
-  final _password = TextEditingController(text: 'Password@123');
+  final _email = TextEditingController();
+  final _password = TextEditingController();
   bool _obscure = true;
   bool _loading = false;
   String? _error;
@@ -39,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await context.read<AppState>().login(_email.text.trim(), _password.text);
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
-    } on AuthException catch (e) {
+    } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (_) {
       if (mounted) {
@@ -61,7 +61,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   String? _validatePassword(String? v) {
     if (v == null || v.isEmpty) return 'Password is required';
-    if (v.length < 8) return 'Password must be at least 8 characters';
     return null;
   }
 
@@ -191,8 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Prototype using demo employee data. Not connected '
-                              'to real university systems.',
+                          'Sign in with the account provided for you.',
                           style: TextStyle(
                               fontSize: 12, color: AppTheme.primary),
                         ),

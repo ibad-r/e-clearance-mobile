@@ -39,8 +39,8 @@ class MockClearanceRepository implements ClearanceRepository {
     return ClearanceRequest(
       id: 'CLR-2026-0001',
       submittedAt: DateTime.now(),
-      lastWorkingDay: draft.lastWorkingDay!,
-      reason: draft.reason!,
+      lastWorkingDay: draft.lastWorkingDay ?? DateTime.now(),
+      reason: draft.reason ?? 'Contract Completion',
       phone: draft.phone,
       forwardingAddress: draft.forwardingAddress,
       remarks: draft.remarks,

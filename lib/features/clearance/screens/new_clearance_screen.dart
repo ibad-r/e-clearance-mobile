@@ -246,21 +246,23 @@ class _NewClearanceScreenState extends State<NewClearanceScreen> {
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
             child: Row(
               children: [
-                SizedBox(
-                  height: 50,
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: AppTheme.textDark,
-                      side: const BorderSide(color: AppTheme.border),
-                      padding: const EdgeInsets.symmetric(horizontal: 28),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                Expanded(
+                  child: SizedBox(
+                    height: 50,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppTheme.textDark,
+                        side: const BorderSide(color: AppTheme.border),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancel',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600)),
                     ),
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
                   ),
                 ),
                 const SizedBox(width: 12),

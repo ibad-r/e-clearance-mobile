@@ -13,6 +13,37 @@ const _red = Color(0xFFC62828);
 class ActiveDashboardScreen extends StatelessWidget {
   const ActiveDashboardScreen({super.key});
 
+  Future<void> _confirmLogout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Log Out'),
+        content: const Text('Are you sure you want to log out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Log Out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      await context.read<AppState>().logout();
+      if (!context.mounted) return;
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.login,
+        (route) => false,
+      );
+    }
+  }
+
   String get _greeting {
     final hour = DateTime.now().hour;
     if (hour < 12) return 'Good morning,';
@@ -42,6 +73,26 @@ class ActiveDashboardScreen extends StatelessWidget {
     final name = emp?.name ?? '';
 
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: const Text(
+          'E-Clearance',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: AppTheme.textDark,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: AppTheme.textDark),
+            tooltip: 'Log out',
+            onPressed: () => _confirmLogout(context),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
@@ -68,6 +119,7 @@ class ActiveDashboardScreen extends StatelessWidget {
                           style: const TextStyle(
                               fontSize: 12, color: AppTheme.textMuted)),
                       Text(name,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
@@ -82,6 +134,7 @@ class ActiveDashboardScreen extends StatelessWidget {
                             TextSpan(text: ' · ${emp?.department ?? ''}'),
                           ],
                         ),
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             fontSize: 11.5, color: AppTheme.textMuted),
                       ),
@@ -104,13 +157,17 @@ class ActiveDashboardScreen extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        request.id,
-                        style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 11.5,
-                            color: AppTheme.textMuted),
+                      Flexible(
+                        child: Text(
+                          request.id,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 11.5,
+                              color: AppTheme.textMuted),
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       StepStatusBadge(request.overallStatus),
                     ],
                   ),
@@ -128,11 +185,15 @@ class ActiveDashboardScreen extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        '${request.clearedCount} of $total stages cleared',
-                        style: const TextStyle(
-                            fontSize: 11.5, color: AppTheme.textMuted),
+                      Flexible(
+                        child: Text(
+                          '${request.clearedCount} of $total stages cleared',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 11.5, color: AppTheme.textMuted),
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       Text(
                         '$percent%',
                         style: const TextStyle(
@@ -271,7 +332,7 @@ class ActiveDashboardScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          formatDateTime(request.submittedAt),
+                          request.submittedAt == null ? 'Submission time not available' : formatDateTime(request.submittedAt!),
                           style: const TextStyle(
                               fontSize: 11.5, color: AppTheme.textMuted),
                         ),
