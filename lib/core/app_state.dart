@@ -46,6 +46,7 @@ class AppState extends ChangeNotifier {
   bool get hasActiveRequest => activeRequest != null;
 
   Future<void> login(String email, String password) async {
+    _clearLocalData();
     final user = await _auth.login(email: email, password: password);
     try {
       final profile = await _profile.getProfile();

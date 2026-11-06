@@ -21,6 +21,7 @@ class DepartmentStep {
   final String? note;
   final int stepOrder;
   final bool isRequired;
+  final int? amountDue;
 
   const DepartmentStep({
     required this.department,
@@ -28,11 +29,12 @@ class DepartmentStep {
     this.note,
     this.stepOrder = 0,
     this.isRequired = true,
+    this.amountDue,
   });
 
-  /// The backend sends no money amounts. Kept only so old screens compile.
-  int? get amountDue => null;
-  String? get amountLabel => null;
+  /// Example: PKR 4,500
+  String? get amountLabel =>
+      amountDue == null ? null : 'PKR ${_withCommas(amountDue!)}';
 
   factory DepartmentStep.fromJson(Map<String, dynamic> json) {
     return DepartmentStep(
@@ -43,6 +45,16 @@ class DepartmentStep {
       isRequired: json['isRequired'] as bool? ?? true,
     );
   }
+}
+
+String _withCommas(int value) {
+  final digits = value.toString();
+  final buffer = StringBuffer();
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
+    buffer.write(digits[i]);
+  }
+  return buffer.toString();
 }
 
 class ApprovalStep {
@@ -70,12 +82,16 @@ class ApprovalStep {
 class ClearanceDraft {
   DateTime? lastWorkingDay;
   String? reason;
+  String phone = '';
+  String forwardingAddress = '';
   String remarks = '';
   bool confirmed = false;
 
   void clear() {
     lastWorkingDay = null;
     reason = null;
+    phone = '';
+    forwardingAddress = '';
     remarks = '';
     confirmed = false;
   }
@@ -83,8 +99,10 @@ class ClearanceDraft {
 
 /// A real clearance case returned by the backend.
 class ClearanceRequest {
+  final String _caseId;
+
   /// Database ID of the case (used for GET /employee/cases/:caseId).
-  final String caseId;
+  String get caseId => _caseId.isEmpty ? id : _caseId;
 
   /// The request code shown to the user (from the backend `requestCode`).
   final String id;
@@ -105,21 +123,31 @@ class ClearanceRequest {
   final int outstandingStages;
   final int skippedStages;
 
+  final String _phone;
+  final String _forwardingAddress;
+
+  String get phone => _phone;
+  String get forwardingAddress => _forwardingAddress;
+
   const ClearanceRequest({
-    required this.caseId,
+    String caseId = '',
     required this.id,
-    required this.status,
+    this.status = 'IN_PROGRESS',
     required this.submittedAt,
     required this.lastWorkingDay,
     required this.reason,
     required this.remarks,
     required this.steps,
-    required this.approvals,
-    required this.totalStages,
-    required this.clearedStages,
-    required this.outstandingStages,
-    required this.skippedStages,
-  });
+    this.approvals = const [],
+    this.totalStages = 0,
+    this.clearedStages = 0,
+    this.outstandingStages = 0,
+    this.skippedStages = 0,
+    String phone = '',
+    String forwardingAddress = '',
+  })  : _caseId = caseId,
+        _phone = phone,
+        _forwardingAddress = forwardingAddress;
 
   factory ClearanceRequest.fromJson(Map<String, dynamic> json) {
     final stages = (json['stages'] as List? ?? const [])

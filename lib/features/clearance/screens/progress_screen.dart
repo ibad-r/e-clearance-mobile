@@ -214,11 +214,15 @@ class _ProgressScreenState extends State<ProgressScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(request.id,
-                      style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 11.5,
-                          color: AppTheme.textMuted)),
+                  Flexible(
+                    child: Text(request.id,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 11.5,
+                            color: AppTheme.textMuted)),
+                  ),
+                  const SizedBox(width: 8),
                   _CaseStatusChip(_caseStatusLabel(request.status)),
                 ],
               ),
@@ -231,15 +235,19 @@ class _ProgressScreenState extends State<ProgressScreen> {
                           fontSize: 28,
                           fontWeight: FontWeight.w800,
                           color: AppTheme.textDark)),
-                  const Spacer(),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      'Overall progress · $cleared of $total cleared',
-                      style: const TextStyle(
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textMuted),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        'Overall progress · $cleared of $total cleared',
+                        textAlign: TextAlign.end,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textMuted),
+                      ),
                     ),
                   ),
                 ],
@@ -474,9 +482,11 @@ class _DetailRow extends StatelessWidget {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style:
-            const TextStyle(fontSize: 12.5, color: AppTheme.textMuted)),
+        Flexible(
+          child: Text(label,
+              style:
+              const TextStyle(fontSize: 12.5, color: AppTheme.textMuted)),
+        ),
         const SizedBox(width: 16),
         Expanded(
           child: Text(

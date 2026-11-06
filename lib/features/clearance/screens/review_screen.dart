@@ -97,6 +97,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   lastDay == null ? 'Not provided' : formatLongDate(lastDay)),
               _DetailRow('Reason for Leaving',
                   _valueOr(draft.reason, 'Not provided')),
+              if (draft.phone.isNotEmpty)
+                _DetailRow('Contact Number', draft.phone),
+              if (draft.forwardingAddress.isNotEmpty)
+                _DetailRow('Forwarding Address', draft.forwardingAddress),
               _DetailRow('Remarks', _valueOr(draft.remarks, 'None')),
             ]),
             const SizedBox(height: 20),

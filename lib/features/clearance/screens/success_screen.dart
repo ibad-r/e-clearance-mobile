@@ -221,7 +221,7 @@ class _InfoRow extends StatelessWidget {
           const TextStyle(fontSize: 12.5, color: AppTheme.textMuted),
         ),
         const SizedBox(width: 16),
-        child,
+        Flexible(child: child),
       ],
     ),
   );
