@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../state/student_state.dart';
 import 'student_dashboard_screen.dart';
 import 'student_details_screen.dart';
+import 'student_history_screen.dart';
 import 'student_profile_screen.dart';
 import 'student_request_screen.dart';
 import 'student_review_screen.dart';
@@ -26,31 +27,25 @@ class _StudentShellState extends State<StudentShell> {
     super.dispose();
   }
 
-  void _openReview() {
+  void _push(Widget screen) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => ChangeNotifierProvider<StudentState>.value(
           value: _state,
-          child: StudentReviewScreen(
-            onGoToTab: (i) => setState(() => _index = i),
-          ),
+          child: screen,
         ),
       ),
     );
   }
 
-  void _openDetails() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ChangeNotifierProvider<StudentState>.value(
-          value: _state,
-          child: const StudentDetailsScreen(),
-        ),
-      ),
-    );
+  void _openReview() {
+    _push(StudentReviewScreen(onGoToTab: (i) => setState(() => _index = i)));
   }
+
+  void _openDetails() => _push(const StudentDetailsScreen());
+
+  void _openHistory() => _push(const StudentHistoryScreen());
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +58,7 @@ class _StudentShellState extends State<StudentShell> {
             StudentDashboardScreen(
               onNewRequest: () => setState(() => _index = 1),
               onViewStatus: () => setState(() => _index = 2),
+              onViewHistory: _openHistory,
             ),
             StudentRequestScreen(onReview: _openReview),
             StudentStatusScreen(onViewDetails: _openDetails),

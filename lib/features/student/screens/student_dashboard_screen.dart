@@ -8,10 +8,12 @@ class StudentDashboardScreen extends StatelessWidget {
     super.key,
     required this.onNewRequest,
     required this.onViewStatus,
+    required this.onViewHistory,
   });
 
   final VoidCallback onNewRequest;
   final VoidCallback onViewStatus;
+  final VoidCallback onViewHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -66,15 +68,28 @@ class StudentDashboardScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
-              'Clearance History',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.textDark,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Clearance History',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textDark,
+                  ),
+                ),
+                TextButton(
+                  onPressed: onViewHistory,
+                  child: const Text(
+                    'View all',
+                    style: TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             if (state.history.isEmpty)
               const _EmptyHistory()
             else
@@ -262,7 +277,6 @@ class _HistoryTile extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(Icons.chevron_right, color: AppTheme.textMuted),
         ],
       ),
     );
