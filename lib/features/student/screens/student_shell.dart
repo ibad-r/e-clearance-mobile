@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../state/student_state.dart';
 import 'student_dashboard_screen.dart';
+import 'student_details_screen.dart';
 import 'student_profile_screen.dart';
 import 'student_request_screen.dart';
 import 'student_review_screen.dart';
@@ -40,9 +41,14 @@ class _StudentShellState extends State<StudentShell> {
   }
 
   void _openDetails() {
-    // TODO: open the Request Details screen (built next).
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Request Details is coming next.')),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChangeNotifierProvider<StudentState>.value(
+          value: _state,
+          child: const StudentDetailsScreen(),
+        ),
+      ),
     );
   }
 
