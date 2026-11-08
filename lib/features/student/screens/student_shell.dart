@@ -4,6 +4,7 @@ import '../state/student_state.dart';
 import 'student_dashboard_screen.dart';
 import 'student_request_screen.dart';
 import 'student_review_screen.dart';
+import 'student_status_screen.dart';
 
 /// Student area with bottom navigation. Tabs not built yet are placeholders.
 class StudentShell extends StatefulWidget {
@@ -37,6 +38,13 @@ class _StudentShellState extends State<StudentShell> {
     );
   }
 
+  void _openDetails() {
+    // TODO: open the Request Details screen (built next).
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Request Details is coming next.')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider<StudentState>.value(
@@ -50,7 +58,7 @@ class _StudentShellState extends State<StudentShell> {
               onViewStatus: () => setState(() => _index = 2),
             ),
             StudentRequestScreen(onReview: _openReview),
-            const _ComingNext('Clearance Status'),
+            StudentStatusScreen(onViewDetails: _openDetails),
             const _ComingNext('Student Profile'),
           ],
         ),

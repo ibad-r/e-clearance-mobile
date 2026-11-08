@@ -58,6 +58,37 @@ class StudentSubmission {
   final String status;
 }
 
+enum DepartmentStatus { pending, cleared, notRequired }
+
+/// One department's status as reported by the server.
+class DepartmentStatusItem {
+  const DepartmentStatusItem({
+    required this.name,
+    required this.status,
+    this.updateText,
+  });
+
+  final String name;
+  final DepartmentStatus status;
+  final String? updateText;
+}
+
+/// The student's current request and department statuses, as reported by the
+/// server. Stays null until the Student API is integrated.
+class StudentRequestStatus {
+  const StudentRequestStatus({
+    required this.referenceNumber,
+    required this.submittedOn,
+    required this.overallStatus,
+    required this.departments,
+  });
+
+  final String referenceNumber;
+  final String submittedOn;
+  final String overallStatus;
+  final List<DepartmentStatusItem> departments;
+}
+
 /// Holds Student data. Everything starts empty and is filled by the Student
 /// API later (not available yet, so no fake data is created here).
 class StudentState extends ChangeNotifier {
@@ -65,5 +96,6 @@ class StudentState extends ChangeNotifier {
   bool hasActiveRequest = false;
   List<StudentHistoryItem> history = const [];
   StudentSubmission? lastSubmission;
+  StudentRequestStatus? currentRequest;
   final StudentRequestDraft draft = StudentRequestDraft();
 }
