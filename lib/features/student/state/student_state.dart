@@ -1,5 +1,17 @@
 import 'package:flutter/foundation.dart';
 
+enum ClearanceReason { degreeCompleted, discontinuingStudies }
+
+/// Values the student types in the request form. Kept here so they survive
+/// navigation between the form and the review screen.
+class StudentRequestDraft {
+  String registrationNumber = '';
+  String fatherName = '';
+  String program = '';
+  String semester = '';
+  ClearanceReason? reason;
+}
+
 class StudentProfile {
   const StudentProfile({
     required this.name,
@@ -32,4 +44,5 @@ class StudentState extends ChangeNotifier {
   StudentProfile? profile;
   bool hasActiveRequest = false;
   List<StudentHistoryItem> history = const [];
+  final StudentRequestDraft draft = StudentRequestDraft();
 }

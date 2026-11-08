@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../state/student_state.dart';
 import 'student_dashboard_screen.dart';
+import 'student_request_screen.dart';
 
-/// Student area with bottom navigation. Only the Dashboard tab is built so
-/// far; the other tabs are placeholders until their screens are added.
+/// Student area with bottom navigation. Tabs not built yet are placeholders.
 class StudentShell extends StatefulWidget {
   const StudentShell({super.key});
 
@@ -27,7 +27,16 @@ class _StudentShellState extends State<StudentShell> {
               onNewRequest: () => setState(() => _index = 1),
               onViewStatus: () => setState(() => _index = 2),
             ),
-            const _ComingNext('New Clearance Request'),
+            StudentRequestScreen(
+              onReview: () {
+                // TODO: open the Review Request screen (built next).
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Review Request screen is coming next.'),
+                  ),
+                );
+              },
+            ),
             const _ComingNext('Clearance Status'),
             const _ComingNext('Student Profile'),
           ],
