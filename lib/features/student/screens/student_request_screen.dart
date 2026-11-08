@@ -20,6 +20,7 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
   late final TextEditingController _programCtrl;
   late final TextEditingController _semesterCtrl;
   bool _reasonMissing = false;
+  bool _showBanner = false;
 
   @override
   void initState() {
@@ -49,7 +50,10 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
     FocusScope.of(context).unfocus();
     final fieldsOk = _formKey.currentState!.validate();
     final reasonOk = _draft.reason != null;
-    setState(() => _reasonMissing = !reasonOk);
+    setState(() {
+      _reasonMissing = !reasonOk;
+      _showBanner = !fieldsOk || !reasonOk;
+    });
     if (!fieldsOk || !reasonOk) return;
     widget.onReview();
   }
@@ -102,6 +106,35 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                       style: TextStyle(
                           fontSize: 12, color: AppTheme.textMuted),
                     ),
+                    if (_showBanner) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2),
+                          borderRadius: BorderRadius.circular(10),
+                          border:
+                          Border.all(color: const Color(0xFFFECACA)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded,
+                                size: 18, color: AppTheme.danger),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Please fix the highlighted fields to '
+                                    'continue.',
+                                style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: AppTheme.danger),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 20),
                     const _SectionTitle('STUDENT INFORMATION'),
                     const _Label('SAP ID'),
@@ -115,8 +148,8 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                       controller: _regCtrl,
                       textInputAction: TextInputAction.next,
                       onChanged: (v) => _draft.registrationNumber = v,
-                      validator: (v) =>
-                          _required(v, 'Enter your registration number'),
+                      validator: (v) => _required(
+                          v, 'Registration number is required.'),
                       decoration: const InputDecoration(
                           hintText: 'e.g. RIU-2022-CS-0000'),
                     ),
@@ -128,7 +161,7 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                       textCapitalization: TextCapitalization.words,
                       onChanged: (v) => _draft.fatherName = v,
                       validator: (v) =>
-                          _required(v, "Enter your father's name"),
+                          _required(v, "Father's name is required."),
                       decoration: const InputDecoration(
                           hintText: 'As on your official records'),
                     ),
@@ -139,7 +172,8 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                       controller: _programCtrl,
                       textInputAction: TextInputAction.next,
                       onChanged: (v) => _draft.program = v,
-                      validator: (v) => _required(v, 'Enter your program'),
+                      validator: (v) =>
+                          _required(v, 'Program is required.'),
                       decoration: const InputDecoration(
                           hintText: 'e.g. BS Computer Science'),
                     ),
@@ -149,7 +183,8 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                       controller: _semesterCtrl,
                       textInputAction: TextInputAction.done,
                       onChanged: (v) => _draft.semester = v,
-                      validator: (v) => _required(v, 'Enter your semester'),
+                      validator: (v) =>
+                          _required(v, 'Semester is required.'),
                       decoration: const InputDecoration(hintText: 'e.g. 8th'),
                     ),
                     const Padding(
@@ -189,7 +224,7 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                       const Padding(
                         padding: EdgeInsets.only(top: 8),
                         child: Text(
-                          'Select a clearance reason',
+                          'Select a clearance reason.',
                           style: TextStyle(
                               fontSize: 12, color: AppTheme.danger),
                         ),
