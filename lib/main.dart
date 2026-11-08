@@ -34,7 +34,7 @@ class _MyAppState extends State<MyApp> {
       await _state.restoreSession().timeout(const Duration(seconds: 20));
     } catch (_) {
       // The saved session could not be confirmed (no network, server down).
-      // Start from the login screen instead of guessing.
+      // Start from the role selection screen instead of guessing.
       try {
         await _state.logout();
       } catch (_) {}
@@ -44,14 +44,14 @@ class _MyAppState extends State<MyApp> {
     setState(() => _ready = true);
   }
 
-  /// When the server says the token has expired, return to the login screen.
+  /// When the server says the token has expired, return to role selection.
   void _onStateChanged() {
     if (!_state.sessionExpired) return;
     _state.sessionExpired = false;
     if (!_ready) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _navigatorKey.currentState
-          ?.pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
+      _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          AppRoutes.roleSelection, (route) => false);
       _messengerKey.currentState?.showSnackBar(
         const SnackBar(
           content: Text('Your session has expired. Please log in again.'),
@@ -77,8 +77,9 @@ class _MyAppState extends State<MyApp> {
         theme: AppTheme.light,
         navigatorKey: _navigatorKey,
         scaffoldMessengerKey: _messengerKey,
-        initialRoute:
-        _state.employee == null ? AppRoutes.login : AppRoutes.dashboard,
+        initialRoute: _state.employee == null
+            ? AppRoutes.roleSelection
+            : AppRoutes.dashboard,
         routes: AppRoutes.table,
         // Shows a spinner until the saved session has been checked.
         builder: (context, child) => _ready
