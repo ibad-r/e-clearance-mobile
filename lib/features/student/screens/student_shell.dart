@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../state/student_state.dart';
 import 'student_dashboard_screen.dart';
 import 'student_request_screen.dart';
+import 'student_review_screen.dart';
 
 /// Student area with bottom navigation. Tabs not built yet are placeholders.
 class StudentShell extends StatefulWidget {
@@ -13,12 +14,33 @@ class StudentShell extends StatefulWidget {
 }
 
 class _StudentShellState extends State<StudentShell> {
+  final StudentState _state = StudentState();
   int _index = 0;
 
   @override
+  void dispose() {
+    _state.dispose();
+    super.dispose();
+  }
+
+  void _openReview() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChangeNotifierProvider<StudentState>.value(
+          value: _state,
+          child: StudentReviewScreen(
+            onGoToTab: (i) => setState(() => _index = i),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<StudentState>(
-      create: (_) => StudentState(),
+    return ChangeNotifierProvider<StudentState>.value(
+      value: _state,
       child: Scaffold(
         body: IndexedStack(
           index: _index,
@@ -27,16 +49,7 @@ class _StudentShellState extends State<StudentShell> {
               onNewRequest: () => setState(() => _index = 1),
               onViewStatus: () => setState(() => _index = 2),
             ),
-            StudentRequestScreen(
-              onReview: () {
-                // TODO: open the Review Request screen (built next).
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Review Request screen is coming next.'),
-                  ),
-                );
-              },
-            ),
+            StudentRequestScreen(onReview: _openReview),
             const _ComingNext('Clearance Status'),
             const _ComingNext('Student Profile'),
           ],

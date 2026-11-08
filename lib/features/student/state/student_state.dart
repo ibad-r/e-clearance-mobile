@@ -2,6 +2,12 @@ import 'package:flutter/foundation.dart';
 
 enum ClearanceReason { degreeCompleted, discontinuingStudies }
 
+extension ClearanceReasonLabel on ClearanceReason {
+  String get label => this == ClearanceReason.degreeCompleted
+      ? 'Degree Completed'
+      : 'Discontinuing Studies';
+}
+
 /// Values the student types in the request form. Kept here so they survive
 /// navigation between the form and the review screen.
 class StudentRequestDraft {
@@ -38,11 +44,26 @@ class StudentHistoryItem {
   final String statusLabel;
 }
 
+/// The real result returned by the server after a request is submitted.
+/// Stays null until the Student API is integrated.
+class StudentSubmission {
+  const StudentSubmission({
+    required this.referenceNumber,
+    required this.submittedOn,
+    required this.status,
+  });
+
+  final String referenceNumber;
+  final String submittedOn;
+  final String status;
+}
+
 /// Holds Student data. Everything starts empty and is filled by the Student
 /// API later (not available yet, so no fake data is created here).
 class StudentState extends ChangeNotifier {
   StudentProfile? profile;
   bool hasActiveRequest = false;
   List<StudentHistoryItem> history = const [];
+  StudentSubmission? lastSubmission;
   final StudentRequestDraft draft = StudentRequestDraft();
 }
