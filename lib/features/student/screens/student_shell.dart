@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../state/student_state.dart';
 import 'student_dashboard_screen.dart';
+import 'student_profile_screen.dart';
 import 'student_request_screen.dart';
 import 'student_review_screen.dart';
 import 'student_status_screen.dart';
 
-/// Student area with bottom navigation. Tabs not built yet are placeholders.
+/// Student area with bottom navigation.
 class StudentShell extends StatefulWidget {
   const StudentShell({super.key});
 
@@ -59,7 +60,7 @@ class _StudentShellState extends State<StudentShell> {
             ),
             StudentRequestScreen(onReview: _openReview),
             StudentStatusScreen(onViewDetails: _openDetails),
-            const _ComingNext('Student Profile'),
+            const StudentProfileScreen(),
           ],
         ),
         bottomNavigationBar: NavigationBar(
@@ -78,15 +79,5 @@ class _StudentShellState extends State<StudentShell> {
         ),
       ),
     );
-  }
-}
-
-class _ComingNext extends StatelessWidget {
-  const _ComingNext(this.title);
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(child: Center(child: Text('$title (coming next)')));
   }
 }

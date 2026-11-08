@@ -8,6 +8,8 @@ extension ClearanceReasonLabel on ClearanceReason {
       : 'Discontinuing Studies';
 }
 
+enum AppearanceChoice { light, dark, system }
+
 /// Values the student types in the request form. Kept here so they survive
 /// navigation between the form and the review screen.
 class StudentRequestDraft {
@@ -23,11 +25,15 @@ class StudentProfile {
     required this.name,
     required this.sapId,
     required this.program,
+    this.registrationNumber,
+    this.email,
   });
 
   final String name;
   final String sapId;
   final String program;
+  final String? registrationNumber;
+  final String? email;
 }
 
 class StudentHistoryItem {
@@ -98,4 +104,12 @@ class StudentState extends ChangeNotifier {
   StudentSubmission? lastSubmission;
   StudentRequestStatus? currentRequest;
   final StudentRequestDraft draft = StudentRequestDraft();
+
+  AppearanceChoice _appearance = AppearanceChoice.light;
+  AppearanceChoice get appearance => _appearance;
+
+  void setAppearance(AppearanceChoice value) {
+    _appearance = value;
+    notifyListeners();
+  }
 }
