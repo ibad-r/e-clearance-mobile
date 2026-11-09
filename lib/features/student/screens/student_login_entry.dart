@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/routes.dart';
 import 'student_login_screen.dart';
 
-/// Wraps the login screen. In debug builds only, it adds a shortcut to the
+/// Wraps the login screen. In debug builds only, it adds shortcuts to the
 /// Student screens because real Student login is not connected yet.
 /// Remove this wrapper when the Student auth API is integrated.
 class StudentLoginEntry extends StatelessWidget {
@@ -21,13 +21,26 @@ class StudentLoginEntry extends StatelessWidget {
             child: SafeArea(
               child: Material(
                 color: Colors.transparent,
-                child: TextButton(
-                  onPressed: () =>
-                      Navigator.pushNamed(context, AppRoutes.studentHome),
-                  child: const Text(
-                    'Preview (debug)',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pushNamed(
+                          context, AppRoutes.studentAccessDenied),
+                      child: const Text(
+                        'Denied (debug)',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          Navigator.pushNamed(context, AppRoutes.studentHome),
+                      child: const Text(
+                        'Preview (debug)',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
