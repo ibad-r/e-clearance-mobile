@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../core/theme/app_theme.dart';
 import '../state/student_state.dart';
 
 class StudentDetailsScreen extends StatelessWidget {
@@ -19,7 +18,7 @@ class StudentDetailsScreen extends StatelessWidget {
   DepartmentStatusItem? _find(StudentRequestStatus? r, String name) {
     if (r == null) return null;
     for (final d in r.departments) {
-      if (d.name == name) return d;
+      if (d.name.startsWith(name)) return d;
     }
     return null;
   }
