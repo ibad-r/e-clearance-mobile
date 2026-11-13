@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/routes.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/theme/theme_controller.dart';
 import '../state/student_state.dart';
 
 class StudentProfileScreen extends StatelessWidget {
@@ -38,6 +39,8 @@ class StudentProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<StudentState>();
+    final theme = context.watch<ThemeController>();
+    final cs = Theme.of(context).colorScheme;
     final p = state.profile;
 
     return SafeArea(
@@ -47,16 +50,16 @@ class StudentProfileScreen extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(bottom: BorderSide(color: AppTheme.border)),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              border: Border(bottom: BorderSide(color: cs.outlineVariant)),
             ),
-            child: const Text(
+            child: Text(
               'Profile',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: AppTheme.textDark,
+                color: cs.onSurface,
               ),
             ),
           ),
@@ -84,10 +87,10 @@ class StudentProfileScreen extends StatelessWidget {
                         const SizedBox(height: 10),
                         Text(
                           p?.name ?? 'Student',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
-                            color: AppTheme.textDark,
+                            color: cs.onSurface,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -95,8 +98,8 @@ class StudentProfileScreen extends StatelessWidget {
                           p == null
                               ? 'Profile details not available yet'
                               : '${p.program} · Student',
-                          style: const TextStyle(
-                              fontSize: 12, color: AppTheme.textMuted),
+                          style: TextStyle(
+                              fontSize: 12, color: cs.onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -119,34 +122,22 @@ class StudentProfileScreen extends StatelessWidget {
                       _AppearanceOption(
                         icon: Icons.light_mode_outlined,
                         label: 'Light',
-                        selected: state.appearance == AppearanceChoice.light,
-                        onTap: () =>
-                            state.setAppearance(AppearanceChoice.light),
+                        selected: theme.mode == ThemeMode.light,
+                        onTap: () => theme.setMode(ThemeMode.light),
                       ),
                       _AppearanceOption(
                         icon: Icons.dark_mode_outlined,
                         label: 'Dark',
-                        selected: state.appearance == AppearanceChoice.dark,
-                        onTap: () =>
-                            state.setAppearance(AppearanceChoice.dark),
+                        selected: theme.mode == ThemeMode.dark,
+                        onTap: () => theme.setMode(ThemeMode.dark),
                       ),
                       _AppearanceOption(
                         icon: Icons.desktop_windows_outlined,
                         label: 'System Default',
-                        selected:
-                        state.appearance == AppearanceChoice.system,
-                        onTap: () =>
-                            state.setAppearance(AppearanceChoice.system),
+                        selected: theme.mode == ThemeMode.system,
+                        onTap: () => theme.setMode(ThemeMode.system),
                       ),
                     ],
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.only(top: 6, left: 4),
-                    child: Text(
-                      'Dark and System Default themes are not applied yet.',
-                      style: TextStyle(
-                          fontSize: 11.5, color: AppTheme.textMuted),
-                    ),
                   ),
                   const SizedBox(height: 22),
                   const _SectionTitle('Account'),
@@ -191,10 +182,10 @@ class _SectionTitle extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 10),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w700,
-        color: AppTheme.textDark,
+        color: Theme.of(context).colorScheme.onSurface,
       ),
     ),
   );
@@ -207,13 +198,14 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: Column(children: children),
     );
@@ -228,12 +220,13 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         border: last
             ? null
-            : const Border(bottom: BorderSide(color: AppTheme.border)),
+            : Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -241,18 +234,17 @@ class _InfoRow extends StatelessWidget {
           Expanded(
             flex: 4,
             child: Text(label,
-                style: const TextStyle(
-                    fontSize: 12, color: AppTheme.textMuted)),
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           ),
           Expanded(
             flex: 6,
             child: Text(
               value,
               textAlign: TextAlign.right,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.textDark,
+                color: cs.onSurface,
               ),
             ),
           ),
@@ -277,26 +269,27 @@ class _AppearanceOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? AppTheme.infoBg : Colors.transparent,
+          color: selected ? cs.primaryContainer : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: AppTheme.textMuted),
+            Icon(icon, size: 18, color: cs.onSurfaceVariant),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w600,
-                  color: AppTheme.textDark,
+                  color: cs.onSurface,
                 ),
               ),
             ),
@@ -305,7 +298,7 @@ class _AppearanceOption extends StatelessWidget {
                   ? Icons.radio_button_checked
                   : Icons.radio_button_unchecked,
               size: 20,
-              color: selected ? AppTheme.primary : AppTheme.textMuted,
+              color: selected ? AppTheme.primary : cs.onSurfaceVariant,
             ),
           ],
         ),
@@ -333,7 +326,8 @@ class _ActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = danger ? AppTheme.danger : AppTheme.textDark;
+    final cs = Theme.of(context).colorScheme;
+    final color = danger ? AppTheme.danger : cs.onSurface;
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -341,7 +335,7 @@ class _ActionRow extends StatelessWidget {
         decoration: BoxDecoration(
           border: last
               ? null
-              : const Border(bottom: BorderSide(color: AppTheme.border)),
+              : Border(bottom: BorderSide(color: cs.outlineVariant)),
         ),
         child: Row(
           children: [
@@ -358,8 +352,7 @@ class _ActionRow extends StatelessWidget {
               ),
             ),
             if (showChevron)
-              const Icon(Icons.chevron_right,
-                  size: 20, color: AppTheme.textMuted),
+              Icon(Icons.chevron_right, size: 20, color: cs.onSurfaceVariant),
           ],
         ),
       ),
