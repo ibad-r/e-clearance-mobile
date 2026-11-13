@@ -27,6 +27,7 @@ class StudentDetailsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<StudentState>();
+    final cs = Theme.of(context).colorScheme;
     final request = state.currentRequest;
     final profile = state.profile;
 
@@ -37,22 +38,23 @@ class StudentDetailsScreen extends StatelessWidget {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(8, 8, 20, 8),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: AppTheme.border)),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                border: Border(bottom: BorderSide(color: cs.outlineVariant)),
               ),
               child: Row(
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back, size: 22),
+                    tooltip: 'Back',
                     onPressed: () => Navigator.pop(context),
                   ),
-                  const Text(
+                  Text(
                     'Request Details',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: AppTheme.textDark,
+                      color: cs.onSurface,
                     ),
                   ),
                 ],
@@ -68,16 +70,16 @@ class StudentDetailsScreen extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: cs.surface,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppTheme.border),
+                        border: Border.all(color: cs.outlineVariant),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Overall status',
+                          Text('Overall status',
                               style: TextStyle(
-                                  fontSize: 12, color: AppTheme.textMuted)),
+                                  fontSize: 12, color: cs.onSurfaceVariant)),
                           const SizedBox(height: 8),
                           request == null
                               ? const _Badge(
@@ -129,17 +131,17 @@ class StudentDetailsScreen extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: cs.surface,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppTheme.border),
+                        border: Border.all(color: cs.outlineVariant),
                       ),
                       child: Text(
                         request == null
                             ? 'No data from the server yet.'
                             : 'No outstanding requirements have been '
                             'reported.',
-                        style: const TextStyle(
-                            fontSize: 13, color: AppTheme.textMuted),
+                        style: TextStyle(
+                            fontSize: 13, color: cs.onSurfaceVariant),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -147,25 +149,24 @@ class StudentDetailsScreen extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppTheme.infoBg,
+                        color: cs.primaryContainer,
                         borderRadius: BorderRadius.circular(12),
-                        border:
-                        Border.all(color: const Color(0xFFCBD8F5)),
+                        border: Border.all(color: cs.outlineVariant),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.school_outlined,
-                              size: 16, color: AppTheme.primary),
+                          Icon(Icons.school_outlined,
+                              size: 16, color: cs.onPrimaryContainer),
                           const SizedBox(width: 8),
                           Expanded(
                             child: RichText(
-                              text: const TextSpan(
+                              text: TextSpan(
                                 style: TextStyle(
                                     fontSize: 12.5,
-                                    color: AppTheme.primary,
+                                    color: cs.onPrimaryContainer,
                                     height: 1.35),
-                                children: [
+                                children: const [
                                   TextSpan(
                                     text: 'Next step after clearance: ',
                                     style: TextStyle(
@@ -207,10 +208,10 @@ class _SectionTitle extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 10),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w700,
-        color: AppTheme.textDark,
+        color: Theme.of(context).colorScheme.onSurface,
       ),
     ),
   );
@@ -222,12 +223,13 @@ class _Card extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: Column(children: children),
     );
@@ -242,12 +244,13 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         border: last
             ? null
-            : const Border(bottom: BorderSide(color: AppTheme.border)),
+            : Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -255,18 +258,17 @@ class _InfoRow extends StatelessWidget {
           Expanded(
             flex: 4,
             child: Text(label,
-                style: const TextStyle(
-                    fontSize: 12, color: AppTheme.textMuted)),
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           ),
           Expanded(
             flex: 6,
             child: Text(
               value,
               textAlign: TextAlign.right,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.textDark,
+                color: cs.onSurface,
               ),
             ),
           ),
@@ -291,6 +293,7 @@ class _DepartmentRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final i = item;
     final badge = i == null
         ? const _Badge(label: 'Not available', kind: _BadgeKind.unknown)
@@ -308,7 +311,7 @@ class _DepartmentRow extends StatelessWidget {
       decoration: BoxDecoration(
         border: last
             ? null
-            : const Border(bottom: BorderSide(color: AppTheme.border)),
+            : Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -323,10 +326,10 @@ class _DepartmentRow extends StatelessWidget {
                   children: [
                     Text(
                       name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: AppTheme.textDark,
+                        color: cs.onSurface,
                       ),
                     ),
                     if (ifRequired)
@@ -335,7 +338,7 @@ class _DepartmentRow extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFFB45309),
+                          color: Color(0xFFD97706),
                         ),
                       ),
                   ],
@@ -345,8 +348,8 @@ class _DepartmentRow extends StatelessWidget {
                   i == null
                       ? 'No data from the server yet'
                       : (i.updateText ?? 'No update yet'),
-                  style: const TextStyle(
-                      fontSize: 11.5, color: AppTheme.textMuted),
+                  style:
+                  TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
                 ),
               ],
             ),
@@ -368,23 +371,16 @@ class _Badge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color bg;
-    final Color fg;
-    switch (kind) {
-      case _BadgeKind.pending:
-        bg = const Color(0xFFFEF3C7);
-        fg = const Color(0xFFB45309);
-      case _BadgeKind.cleared:
-        bg = const Color(0xFFE6F4EA);
-        fg = const Color(0xFF15803D);
-      case _BadgeKind.unknown:
-        bg = const Color(0xFFEEF1F5);
-        fg = AppTheme.textMuted;
-    }
+    final cs = Theme.of(context).colorScheme;
+    final Color fg = switch (kind) {
+      _BadgeKind.pending => const Color(0xFFD97706),
+      _BadgeKind.cleared => const Color(0xFF16A34A),
+      _BadgeKind.unknown => cs.onSurfaceVariant,
+    };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: bg,
+        color: fg.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
