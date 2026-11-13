@@ -18,8 +18,10 @@ class StudentConfirmationScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     // Real values come from the server once the Student API is integrated.
     final result = context.watch<StudentState>().lastSubmission;
+    final cs = Theme.of(context).colorScheme;
     final submitted = result != null;
     const missing = 'Not available yet';
+    const green = Color(0xFF16A34A);
 
     return Scaffold(
       body: SafeArea(
@@ -37,16 +39,14 @@ class StudentConfirmationScreen extends StatelessWidget {
                         height: 72,
                         decoration: BoxDecoration(
                           color: submitted
-                              ? const Color(0xFFE6F4EA)
-                              : AppTheme.infoBg,
+                              ? green.withValues(alpha: 0.15)
+                              : cs.primaryContainer,
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
                           submitted ? Icons.check : Icons.info_outline,
                           size: 34,
-                          color: submitted
-                              ? const Color(0xFF15803D)
-                              : AppTheme.primary,
+                          color: submitted ? green : AppTheme.primary,
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -55,10 +55,10 @@ class StudentConfirmationScreen extends StatelessWidget {
                             ? 'Request Submitted Successfully'
                             : 'Submission Not Connected Yet',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
-                          color: AppTheme.textDark,
+                          color: cs.onSurface,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -70,15 +70,15 @@ class StudentConfirmationScreen extends StatelessWidget {
                             'to the server is not available yet. '
                             'No request has been sent.',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            fontSize: 12.5, color: AppTheme.textMuted),
+                        style: TextStyle(
+                            fontSize: 12.5, color: cs.onSurfaceVariant),
                       ),
                       const SizedBox(height: 22),
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: cs.surface,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: AppTheme.border),
+                          border: Border.all(color: cs.outlineVariant),
                         ),
                         child: Column(
                           children: [
@@ -106,9 +106,9 @@ class StudentConfirmationScreen extends StatelessWidget {
             ),
             Container(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: AppTheme.border)),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                border: Border(top: BorderSide(color: cs.outlineVariant)),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -158,19 +158,19 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         border: last
             ? null
-            : const Border(bottom: BorderSide(color: AppTheme.border)),
+            : Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label,
-              style:
-              const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           Flexible(
             child: Text(
               value,
@@ -178,7 +178,7 @@ class _InfoRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
-                color: AppTheme.textDark,
+                color: cs.onSurface,
                 fontFamily: mono ? 'monospace' : null,
               ),
             ),

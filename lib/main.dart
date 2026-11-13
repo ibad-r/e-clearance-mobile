@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'core/app_state.dart';
 import 'core/routes.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_controller.dart';
 
 void main() {
   runApp(const MyApp());
@@ -17,6 +18,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   final AppState _state = AppState();
+  final ThemeController _theme = ThemeController();
   final _navigatorKey = GlobalKey<NavigatorState>();
   final _messengerKey = GlobalKey<ScaffoldMessengerState>();
   bool _ready = false;
@@ -24,6 +26,7 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    _theme.load();
     _state.addListener(_onStateChanged);
     _restoreSession();
   }
@@ -64,28 +67,36 @@ class _MyAppState extends State<MyApp> {
   void dispose() {
     _state.removeListener(_onStateChanged);
     _state.dispose();
+    _theme.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider<AppState>.value(
-      value: _state,
-      child: MaterialApp(
-        title: 'E-Clearance',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light,
-        navigatorKey: _navigatorKey,
-        scaffoldMessengerKey: _messengerKey,
-        initialRoute: _state.employee == null
-            ? AppRoutes.roleSelection
-            : AppRoutes.dashboard,
-        routes: AppRoutes.table,
-        // Shows a spinner until the saved session has been checked.
-        builder: (context, child) => _ready
-            ? child!
-            : const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider<AppState>.value(value: _state),
+        ChangeNotifierProvider<ThemeController>.value(value: _theme),
+      ],
+      child: Consumer<ThemeController>(
+        builder: (context, themeCtrl, _) => MaterialApp(
+          title: 'E-Clearance',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light,
+          darkTheme: AppTheme.dark,
+          themeMode: themeCtrl.mode,
+          navigatorKey: _navigatorKey,
+          scaffoldMessengerKey: _messengerKey,
+          initialRoute: _state.employee == null
+              ? AppRoutes.roleSelection
+              : AppRoutes.dashboard,
+          routes: AppRoutes.table,
+          // Shows a spinner until the saved session has been checked.
+          builder: (context, child) => _ready
+              ? child!
+              : const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          ),
         ),
       ),
     );

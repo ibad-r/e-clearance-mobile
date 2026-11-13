@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../core/theme/app_theme.dart';
+
 import '../state/student_state.dart';
 
 class StudentStatusScreen extends StatelessWidget {
@@ -23,7 +23,7 @@ class StudentStatusScreen extends StatelessWidget {
   DepartmentStatusItem? _find(StudentRequestStatus? r, String name) {
     if (r == null) return null;
     for (final d in r.departments) {
-      if (d.name == name) return d;
+      if (d.name.startsWith(name)) return d;
     }
     return null;
   }
@@ -31,6 +31,7 @@ class StudentStatusScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final request = context.watch<StudentState>().currentRequest;
+    final cs = Theme.of(context).colorScheme;
 
     return SafeArea(
       bottom: false,
@@ -39,16 +40,16 @@ class StudentStatusScreen extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(bottom: BorderSide(color: AppTheme.border)),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              border: Border(bottom: BorderSide(color: cs.outlineVariant)),
             ),
-            child: const Text(
+            child: Text(
               'Clearance Status',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: AppTheme.textDark,
+                color: cs.onSurface,
               ),
             ),
           ),
@@ -60,22 +61,22 @@ class StudentStatusScreen extends StatelessWidget {
                 children: [
                   _RequestSummary(request: request),
                   const SizedBox(height: 14),
-                  const _InfoBox(
+                  _InfoBox(
                     icon: Icons.info_outline,
                     child: Text(
                       'Each department is shown independently. '
                           'No processing order is assumed.',
                       style: TextStyle(
-                          fontSize: 12.5, color: AppTheme.primary),
+                          fontSize: 12.5, color: cs.onPrimaryContainer),
                     ),
                   ),
                   const SizedBox(height: 20),
-                  const Text(
+                  Text(
                     'Departments',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: AppTheme.textDark,
+                      color: cs.onSurface,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -89,12 +90,12 @@ class StudentStatusScreen extends StatelessWidget {
                   _InfoBox(
                     icon: Icons.school_outlined,
                     child: RichText(
-                      text: const TextSpan(
+                      text: TextSpan(
                         style: TextStyle(
                             fontSize: 12.5,
-                            color: AppTheme.primary,
+                            color: cs.onPrimaryContainer,
                             height: 1.35),
-                        children: [
+                        children: const [
                           TextSpan(
                             text: 'Next step after clearance: ',
                             style: TextStyle(fontWeight: FontWeight.w700),
@@ -117,9 +118,9 @@ class StudentStatusScreen extends StatelessWidget {
                     child: OutlinedButton(
                       onPressed: onViewDetails,
                       style: OutlinedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: AppTheme.textDark,
-                        side: const BorderSide(color: AppTheme.border),
+                        backgroundColor: cs.surface,
+                        foregroundColor: cs.onSurface,
+                        side: BorderSide(color: cs.outlineVariant),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
                       ),
@@ -150,30 +151,30 @@ class _RequestSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final r = request;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: r == null
-          ? const Column(
+          ? Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('No active request',
               style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: AppTheme.textDark)),
-          SizedBox(height: 4),
+                  color: cs.onSurface)),
+          const SizedBox(height: 4),
           Text(
             'Department statuses appear here after a clearance '
                 'request has been submitted and the server reports them.',
-            style:
-            TextStyle(fontSize: 12, color: AppTheme.textMuted),
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
         ],
       )
@@ -185,18 +186,18 @@ class _RequestSummary extends StatelessWidget {
             children: [
               Text(
                 r.referenceNumber,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 12,
                     fontFamily: 'monospace',
-                    color: AppTheme.textMuted),
+                    color: cs.onSurfaceVariant),
               ),
               _Badge(label: r.overallStatus, kind: _BadgeKind.pending),
             ],
           ),
           const SizedBox(height: 6),
           Text('Submitted ${r.submittedOn}',
-              style: const TextStyle(
-                  fontSize: 12, color: AppTheme.textMuted)),
+              style: TextStyle(
+                  fontSize: 12, color: cs.onSurfaceVariant)),
         ],
       ),
     );
@@ -210,18 +211,19 @@ class _InfoBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.infoBg,
+        color: cs.primaryContainer,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFCBD8F5)),
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 16, color: AppTheme.primary),
+          Icon(icon, size: 16, color: cs.onPrimaryContainer),
           const SizedBox(width: 8),
           Expanded(child: child),
         ],
@@ -243,6 +245,7 @@ class _DepartmentCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final i = item;
     final badge = i == null
         ? const _Badge(label: 'Not available', kind: _BadgeKind.unknown)
@@ -263,9 +266,9 @@ class _DepartmentCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cs.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppTheme.border),
+          border: Border.all(color: cs.outlineVariant),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -276,15 +279,15 @@ class _DepartmentCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     area.name,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: AppTheme.textDark,
+                      color: cs.onSurface,
                     ),
                   ),
                 ),
-                const Icon(Icons.chevron_right,
-                    size: 20, color: AppTheme.textMuted),
+                Icon(Icons.chevron_right,
+                    size: 20, color: cs.onSurfaceVariant),
               ],
             ),
             const SizedBox(height: 8),
@@ -294,15 +297,13 @@ class _DepartmentCard extends StatelessWidget {
               i == null
                   ? 'No data from the server yet'
                   : (i.updateText ?? 'No update yet'),
-              style:
-              const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             if (area.note != null) ...[
               const SizedBox(height: 4),
               Text(
                 area.note!,
-                style: const TextStyle(
-                    fontSize: 11.5, color: AppTheme.textMuted),
+                style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
               ),
             ],
           ],
@@ -321,23 +322,16 @@ class _Badge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color bg;
-    final Color fg;
-    switch (kind) {
-      case _BadgeKind.pending:
-        bg = const Color(0xFFFEF3C7);
-        fg = const Color(0xFFB45309);
-      case _BadgeKind.cleared:
-        bg = const Color(0xFFE6F4EA);
-        fg = const Color(0xFF15803D);
-      case _BadgeKind.unknown:
-        bg = const Color(0xFFEEF1F5);
-        fg = AppTheme.textMuted;
-    }
+    final cs = Theme.of(context).colorScheme;
+    final Color fg = switch (kind) {
+      _BadgeKind.pending => const Color(0xFFD97706),
+      _BadgeKind.cleared => const Color(0xFF16A34A),
+      _BadgeKind.unknown => cs.onSurfaceVariant,
+    };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: bg,
+        color: fg.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(

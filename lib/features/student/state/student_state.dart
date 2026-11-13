@@ -95,6 +95,8 @@ class StudentRequestStatus {
   final List<DepartmentStatusItem> departments;
 }
 
+enum DashboardLoadState { ready, loading, error }
+
 /// Holds Student data. Everything starts empty and is filled by the Student
 /// API later (not available yet, so no fake data is created here).
 class StudentState extends ChangeNotifier {
@@ -110,6 +112,71 @@ class StudentState extends ChangeNotifier {
 
   void setAppearance(AppearanceChoice value) {
     _appearance = value;
+    notifyListeners();
+  }
+
+  // ---- Dashboard load state (loading / ready / error) ----
+  DashboardLoadState dashboardLoad = DashboardLoadState.ready;
+  String? dashboardError;
+
+  /// True only while the local DEMO/PREVIEW sample is shown (Phase 1).
+  bool isPreview = false;
+
+  /// Phase 1: there is no server yet, so this only resets the local load flags.
+  /// Phase 2: load GET /student/dashboard here and set ready or error.
+  Future<void> refreshDashboard() async {
+    dashboardLoad = DashboardLoadState.loading;
+    dashboardError = null;
+    notifyListeners();
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    dashboardLoad = DashboardLoadState.ready;
+    notifyListeners();
+  }
+
+  // ---- Local DEMO/PREVIEW helpers for Phase 1 screenshots (debug only) ----
+  void previewActive() {
+    isPreview = true;
+    hasActiveRequest = true;
+    dashboardLoad = DashboardLoadState.ready;
+    dashboardError = null;
+    currentRequest = const StudentRequestStatus(
+      referenceNumber: 'DEMO-0001',
+      submittedOn: 'Demo date',
+      overallStatus: 'In progress',
+      departments: [
+        DepartmentStatusItem(name: 'Library', status: DepartmentStatus.cleared),
+        DepartmentStatusItem(
+            name: 'Fee & Dues Department', status: DepartmentStatus.pending),
+        DepartmentStatusItem(
+            name: 'Student Service Department',
+            status: DepartmentStatus.pending),
+        DepartmentStatusItem(
+            name: 'Laboratory (if required)', status: DepartmentStatus.pending),
+        DepartmentStatusItem(
+            name: 'Coordination Office', status: DepartmentStatus.pending),
+      ],
+    );
+    notifyListeners();
+  }
+
+  void previewEmpty() {
+    isPreview = false;
+    hasActiveRequest = false;
+    currentRequest = null;
+    dashboardLoad = DashboardLoadState.ready;
+    dashboardError = null;
+    notifyListeners();
+  }
+
+  void previewError() {
+    dashboardLoad = DashboardLoadState.error;
+    dashboardError =
+    'Could not load your dashboard. Check your connection and try again.';
+    notifyListeners();
+  }
+
+  void previewLoading() {
+    dashboardLoad = DashboardLoadState.loading;
     notifyListeners();
   }
 }

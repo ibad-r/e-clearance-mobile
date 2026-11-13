@@ -46,6 +46,23 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
     return null;
   }
 
+  /// True when every field has a value and a reason is chosen.
+  /// Used only to hide the red banner once the user has fixed everything.
+  bool _allValid() =>
+      _draft.registrationNumber.trim().isNotEmpty &&
+          _draft.fatherName.trim().isNotEmpty &&
+          _draft.program.trim().isNotEmpty &&
+          _draft.semester.trim().isNotEmpty &&
+          _draft.reason != null;
+
+  /// Called on every edit: stores the value and clears a stale banner.
+  void _onEdited(void Function() store) {
+    store();
+    if (_showBanner && _allValid()) {
+      setState(() => _showBanner = false);
+    }
+  }
+
   void _review() {
     FocusScope.of(context).unfocus();
     final fieldsOk = _formKey.currentState!.validate();
@@ -58,9 +75,18 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
     widget.onReview();
   }
 
+  void _pickReason(ClearanceReason r) {
+    setState(() {
+      _draft.reason = r;
+      _reasonMissing = false; // error disappears as soon as a reason is chosen
+      if (_showBanner && _allValid()) _showBanner = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final profile = context.watch<StudentState>().profile;
+    final cs = Theme.of(context).colorScheme;
 
     return SafeArea(
       bottom: false,
@@ -69,16 +95,16 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(bottom: BorderSide(color: AppTheme.border)),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              border: Border(bottom: BorderSide(color: cs.outlineVariant)),
             ),
-            child: const Text(
+            child: Text(
               'Clearance Request',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: AppTheme.textDark,
+                color: cs.onSurface,
               ),
             ),
           ),
@@ -89,22 +115,25 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
               child: Form(
                 key: _formKey,
+                // Errors update while the user edits, so a fixed field
+                // loses its red error immediately.
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        Expanded(child: _bar(true)),
+                        Expanded(child: _bar(context, true)),
                         const SizedBox(width: 6),
-                        Expanded(child: _bar(false)),
+                        Expanded(child: _bar(context, false)),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Step 1 of 2 · Based on the official Student '
                           'University Clearance Form.',
-                      style: TextStyle(
-                          fontSize: 12, color: AppTheme.textMuted),
+                      style:
+                      TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                     ),
                     if (_showBanner) ...[
                       const SizedBox(height: 14),
@@ -112,23 +141,22 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFEF2F2),
+                          color: cs.errorContainer,
                           borderRadius: BorderRadius.circular(10),
-                          border:
-                          Border.all(color: const Color(0xFFFECACA)),
+                          border: Border.all(color: cs.error),
                         ),
-                        child: const Row(
+                        child: Row(
                           children: [
                             Icon(Icons.warning_amber_rounded,
-                                size: 18, color: AppTheme.danger),
-                            SizedBox(width: 8),
+                                size: 18, color: cs.error),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 'Please fix the highlighted fields to '
                                     'continue.',
                                 style: TextStyle(
                                     fontSize: 12.5,
-                                    color: AppTheme.danger),
+                                    color: cs.onErrorContainer),
                               ),
                             ),
                           ],
@@ -147,9 +175,10 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                     TextFormField(
                       controller: _regCtrl,
                       textInputAction: TextInputAction.next,
-                      onChanged: (v) => _draft.registrationNumber = v,
-                      validator: (v) => _required(
-                          v, 'Registration number is required.'),
+                      onChanged: (v) =>
+                          _onEdited(() => _draft.registrationNumber = v),
+                      validator: (v) =>
+                          _required(v, 'Registration number is required.'),
                       decoration: const InputDecoration(
                           hintText: 'e.g. RIU-2022-CS-0000'),
                     ),
@@ -159,7 +188,8 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                       controller: _fatherCtrl,
                       textInputAction: TextInputAction.next,
                       textCapitalization: TextCapitalization.words,
-                      onChanged: (v) => _draft.fatherName = v,
+                      onChanged: (v) =>
+                          _onEdited(() => _draft.fatherName = v),
                       validator: (v) =>
                           _required(v, "Father's name is required."),
                       decoration: const InputDecoration(
@@ -171,9 +201,8 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                     TextFormField(
                       controller: _programCtrl,
                       textInputAction: TextInputAction.next,
-                      onChanged: (v) => _draft.program = v,
-                      validator: (v) =>
-                          _required(v, 'Program is required.'),
+                      onChanged: (v) => _onEdited(() => _draft.program = v),
+                      validator: (v) => _required(v, 'Program is required.'),
                       decoration: const InputDecoration(
                           hintText: 'e.g. BS Computer Science'),
                     ),
@@ -182,17 +211,17 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                     TextFormField(
                       controller: _semesterCtrl,
                       textInputAction: TextInputAction.done,
-                      onChanged: (v) => _draft.semester = v,
-                      validator: (v) =>
-                          _required(v, 'Semester is required.'),
-                      decoration: const InputDecoration(hintText: 'e.g. 8th'),
+                      onChanged: (v) => _onEdited(() => _draft.semester = v),
+                      validator: (v) => _required(v, 'Semester is required.'),
+                      decoration:
+                      const InputDecoration(hintText: 'e.g. 8th'),
                     ),
-                    const Padding(
-                      padding: EdgeInsets.only(top: 6),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
                       child: Text(
                         'Your current or final semester.',
                         style: TextStyle(
-                            fontSize: 11.5, color: AppTheme.textMuted),
+                            fontSize: 11.5, color: cs.onSurfaceVariant),
                       ),
                     ),
                     const SizedBox(height: 22),
@@ -203,10 +232,7 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                       'I have completed all requirements of my degree.',
                       selected:
                       _draft.reason == ClearanceReason.degreeCompleted,
-                      onTap: () => setState(() {
-                        _draft.reason = ClearanceReason.degreeCompleted;
-                        _reasonMissing = false;
-                      }),
+                      onTap: () => _pickReason(ClearanceReason.degreeCompleted),
                     ),
                     const SizedBox(height: 10),
                     _ReasonCard(
@@ -215,18 +241,15 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                       'I am leaving my program before completing it.',
                       selected: _draft.reason ==
                           ClearanceReason.discontinuingStudies,
-                      onTap: () => setState(() {
-                        _draft.reason = ClearanceReason.discontinuingStudies;
-                        _reasonMissing = false;
-                      }),
+                      onTap: () =>
+                          _pickReason(ClearanceReason.discontinuingStudies),
                     ),
                     if (_reasonMissing)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 8),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
                         child: Text(
                           'Select a clearance reason.',
-                          style: TextStyle(
-                              fontSize: 12, color: AppTheme.danger),
+                          style: TextStyle(fontSize: 12, color: cs.error),
                         ),
                       ),
                   ],
@@ -236,9 +259,9 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
           ),
           Container(
             padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: AppTheme.border)),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              border: Border(top: BorderSide(color: cs.outlineVariant)),
             ),
             child: SizedBox(
               width: double.infinity,
@@ -263,10 +286,12 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
     );
   }
 
-  Widget _bar(bool active) => Container(
+  Widget _bar(BuildContext context, bool active) => Container(
     height: 4,
     decoration: BoxDecoration(
-      color: active ? AppTheme.primary : AppTheme.border,
+      color: active
+          ? AppTheme.primary
+          : Theme.of(context).colorScheme.outlineVariant,
       borderRadius: BorderRadius.circular(2),
     ),
   );
@@ -281,11 +306,11 @@ class _SectionTitle extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 10),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.5,
-        color: AppTheme.textMuted,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
       ),
     ),
   );
@@ -300,10 +325,10 @@ class _Label extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 6),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 12.5,
         fontWeight: FontWeight.w600,
-        color: AppTheme.textDark,
+        color: Theme.of(context).colorScheme.onSurface,
       ),
     ),
   );
@@ -315,24 +340,25 @@ class _LockedField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final hasValue = value != null && value!.isNotEmpty;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFFEEF1F5),
+        color: cs.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: Row(
         children: [
-          const Icon(Icons.lock_outline, size: 16, color: AppTheme.textMuted),
+          Icon(Icons.lock_outline, size: 16, color: cs.onSurfaceVariant),
           const SizedBox(width: 8),
           Text(
             hasValue ? value! : 'Not available yet',
             style: TextStyle(
               fontSize: 14,
-              color: hasValue ? AppTheme.textDark : AppTheme.textMuted,
+              color: hasValue ? cs.onSurface : cs.onSurfaceVariant,
             ),
           ),
         ],
@@ -356,6 +382,7 @@ class _ReasonCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: onTap,
@@ -363,10 +390,10 @@ class _ReasonCard extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: selected ? AppTheme.infoBg : Colors.white,
+          color: selected ? cs.primaryContainer : cs.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? AppTheme.primary : AppTheme.border,
+            color: selected ? AppTheme.primary : cs.outlineVariant,
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -378,7 +405,7 @@ class _ReasonCard extends StatelessWidget {
                   ? Icons.radio_button_checked
                   : Icons.radio_button_unchecked,
               size: 20,
-              color: selected ? AppTheme.primary : AppTheme.textMuted,
+              color: selected ? AppTheme.primary : cs.onSurfaceVariant,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -386,14 +413,14 @@ class _ReasonCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(title,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w700,
-                          color: AppTheme.textDark)),
+                          color: cs.onSurface)),
                   const SizedBox(height: 2),
                   Text(subtitle,
-                      style: const TextStyle(
-                          fontSize: 12, color: AppTheme.textMuted)),
+                      style: TextStyle(
+                          fontSize: 12, color: cs.onSurfaceVariant)),
                 ],
               ),
             ),

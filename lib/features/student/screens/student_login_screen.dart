@@ -43,6 +43,7 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
   }
 
   Future<void> _submit() async {
+    if (_loading) return; // ignore repeated taps
     FocusScope.of(context).unfocus();
     setState(() => _error = null);
     if (!_formKey.currentState!.validate()) return;
@@ -76,6 +77,8 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -83,6 +86,9 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
           padding: const EdgeInsets.fromLTRB(20, 32, 20, 24),
           child: Form(
             key: _formKey,
+            // Errors update while the user edits, so a fixed field
+            // loses its red error immediately.
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -107,22 +113,22 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
+                Text(
                   'Student Login',
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.w800,
-                    color: AppTheme.textDark,
+                    color: cs.onSurface,
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'Riphah International University. Sign in with your '
                       'university email or SAP ID to manage your clearance.',
                   style: TextStyle(
                     fontSize: 13,
                     height: 1.4,
-                    color: AppTheme.textMuted,
+                    color: cs.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -180,21 +186,20 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
                     padding: const EdgeInsets.all(12),
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFEF2F2),
+                      color: cs.errorContainer,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFFECACA)),
+                      border: Border.all(color: cs.error),
                     ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.error_outline,
-                            size: 18, color: AppTheme.danger),
+                        Icon(Icons.error_outline, size: 18, color: cs.error),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             _error!,
-                            style: const TextStyle(
-                                fontSize: 12.5, color: AppTheme.danger),
+                            style: TextStyle(
+                                fontSize: 12.5, color: cs.onErrorContainer),
                           ),
                         ),
                       ],
@@ -260,10 +265,10 @@ class _FieldLabel extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(
         text,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 12.5,
           fontWeight: FontWeight.w600,
-          color: AppTheme.textDark,
+          color: Theme.of(context).colorScheme.onSurface,
         ),
       ),
     );
