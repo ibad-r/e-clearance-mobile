@@ -7,6 +7,8 @@ class RoleSelectionScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       body: SafeArea(
         child: SingleChildScrollView(
@@ -25,12 +27,12 @@ class RoleSelectionScreen extends StatelessWidget {
                     color: Colors.white, size: 28),
               ),
               const SizedBox(height: 20),
-              const Text(
+              Text(
                 'E-Clearance Management System',
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.w800,
-                  color: AppTheme.textDark,
+                  color: cs.onSurface,
                   height: 1.15,
                 ),
               ),
@@ -44,9 +46,9 @@ class RoleSelectionScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 6),
-              const Text(
+              Text(
                 'Choose how you will sign in.',
-                style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
               ),
               const SizedBox(height: 20),
               _AccessCard(
@@ -71,22 +73,22 @@ class RoleSelectionScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppTheme.infoBg,
+                  color: cs.primaryContainer,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFCBD8F5)),
+                  border: Border.all(color: cs.outlineVariant),
                 ),
-                child: const Row(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Icon(Icons.shield_outlined,
-                        size: 18, color: AppTheme.primary),
-                    SizedBox(width: 10),
+                        size: 18, color: cs.onPrimaryContainer),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         'Choosing an access type does not grant access. '
                             'Your account role is checked when you sign in.',
                         style: TextStyle(
-                            fontSize: 12.5, color: AppTheme.primary),
+                            fontSize: 12.5, color: cs.onPrimaryContainer),
                       ),
                     ),
                   ],
@@ -117,11 +119,13 @@ class _AccessCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.outlineVariant),
         boxShadow: const [
           BoxShadow(
             color: Color(0x14000000),
@@ -139,7 +143,7 @@ class _AccessCard extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppTheme.infoBg,
+                  color: cs.primaryContainer,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: AppTheme.primary, size: 22),
@@ -147,10 +151,10 @@ class _AccessCard extends StatelessWidget {
               const SizedBox(width: 12),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
-                  color: AppTheme.textDark,
+                  color: cs.onSurface,
                 ),
               ),
             ],
@@ -158,7 +162,7 @@ class _AccessCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             description,
-            style: const TextStyle(fontSize: 13, color: AppTheme.textMuted),
+            style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
           ),
           const SizedBox(height: 14),
           SizedBox(

@@ -10,6 +10,8 @@ class StudentAccessDeniedScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -24,28 +26,28 @@ class StudentAccessDeniedScreen extends StatelessWidget {
                       Container(
                         width: 72,
                         height: 72,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFEF2F2),
+                        decoration: BoxDecoration(
+                          color: cs.errorContainer,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.block,
                           size: 34,
-                          color: AppTheme.danger,
+                          color: cs.error,
                         ),
                       ),
                       const SizedBox(height: 20),
-                      const Text(
+                      Text(
                         'Access Denied',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
-                          color: AppTheme.textDark,
+                          color: cs.onSurface,
                         ),
                       ),
                       const SizedBox(height: 8),
-                      const Text(
+                      Text(
                         'This account is not registered as a student, so it '
                             'cannot use Student Access. Choose the access type '
                             'that matches your account and sign in again.',
@@ -53,7 +55,7 @@ class StudentAccessDeniedScreen extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 12.5,
                           height: 1.4,
-                          color: AppTheme.textMuted,
+                          color: cs.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -63,9 +65,9 @@ class StudentAccessDeniedScreen extends StatelessWidget {
             ),
             Container(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: AppTheme.border)),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                border: Border(top: BorderSide(color: cs.outlineVariant)),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
