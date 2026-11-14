@@ -4,22 +4,33 @@ import '../../../core/theme/app_theme.dart';
 import '../state/student_state.dart';
 import 'student_confirmation_screen.dart';
 
-class StudentReviewScreen extends StatelessWidget {
+class StudentReviewScreen extends StatefulWidget {
   const StudentReviewScreen({super.key, required this.onGoToTab});
 
   /// Switches the Student bottom-navigation tab after leaving this flow.
   final void Function(int) onGoToTab;
 
+  @override
+  State<StudentReviewScreen> createState() => _StudentReviewScreenState();
+}
+
+class _StudentReviewScreenState extends State<StudentReviewScreen> {
+  bool _submitting = false;
+
   void _confirmAndSubmit(BuildContext context) {
+    if (_submitting) return; // ignore repeated taps
+    setState(() => _submitting = true);
+
     // TODO(student-api): send the request to the server here once Ibad shares
     // the agreed contract. Nothing is sent yet, and no result is faked.
+    // Phase 2: await POST /student/requests, and set _submitting = false on error.
     final state = context.read<StudentState>();
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (_) => ChangeNotifierProvider<StudentState>.value(
           value: state,
-          child: StudentConfirmationScreen(onGoToTab: onGoToTab),
+          child: StudentConfirmationScreen(onGoToTab: widget.onGoToTab),
         ),
       ),
     );
@@ -28,6 +39,7 @@ class StudentReviewScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<StudentState>();
+    final cs = Theme.of(context).colorScheme;
     final draft = state.draft;
     final profile = state.profile;
     const missing = 'Not available yet';
@@ -39,22 +51,23 @@ class StudentReviewScreen extends StatelessWidget {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(8, 8, 20, 8),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: AppTheme.border)),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                border: Border(bottom: BorderSide(color: cs.outlineVariant)),
               ),
               child: Row(
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back, size: 22),
+                    tooltip: 'Back to request form',
                     onPressed: () => Navigator.pop(context),
                   ),
-                  const Text(
+                  Text(
                     'Review Request',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: AppTheme.textDark,
+                      color: cs.onSurface,
                     ),
                   ),
                 ],
@@ -74,18 +87,18 @@ class StudentReviewScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'Step 2 of 2 · Please confirm your details.',
-                      style: TextStyle(
-                          fontSize: 12, color: AppTheme.textMuted),
+                      style:
+                      TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                     ),
                     const SizedBox(height: 18),
                     const _SectionTitle('STUDENT DETAILS'),
                     Container(
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: cs.surface,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppTheme.border),
+                        border: Border.all(color: cs.outlineVariant),
                       ),
                       child: Column(
                         children: [
@@ -106,19 +119,19 @@ class StudentReviewScreen extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 14),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: cs.surface,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppTheme.border),
+                        border: Border.all(color: cs.outlineVariant),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
                             draft.reason?.label ?? '—',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
-                              color: AppTheme.textDark,
+                              color: cs.onSurface,
                             ),
                           ),
                           GestureDetector(
@@ -140,24 +153,23 @@ class StudentReviewScreen extends StatelessWidget {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppTheme.infoBg,
+                        color: cs.primaryContainer,
                         borderRadius: BorderRadius.circular(12),
-                        border:
-                        Border.all(color: const Color(0xFFCBD8F5)),
+                        border: Border.all(color: cs.outlineVariant),
                       ),
-                      child: const Row(
+                      child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Icon(Icons.info_outline,
-                              size: 16, color: AppTheme.primary),
-                          SizedBox(width: 8),
+                              size: 16, color: cs.onPrimaryContainer),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               "After you submit, each department's status "
                                   'will appear on the Clearance Status screen. '
                                   'Processing rules are confirmed separately.',
                               style: TextStyle(
-                                  fontSize: 12, color: AppTheme.primary),
+                                  fontSize: 12, color: cs.onPrimaryContainer),
                             ),
                           ),
                         ],
@@ -169,9 +181,9 @@ class StudentReviewScreen extends StatelessWidget {
             ),
             Container(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: AppTheme.border)),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                border: Border(top: BorderSide(color: cs.outlineVariant)),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -180,7 +192,8 @@ class StudentReviewScreen extends StatelessWidget {
                     width: double.infinity,
                     height: 48,
                     child: ElevatedButton(
-                      onPressed: () => _confirmAndSubmit(context),
+                      onPressed:
+                      _submitting ? null : () => _confirmAndSubmit(context),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.primary,
                         foregroundColor: Colors.white,
@@ -188,13 +201,21 @@ class StudentReviewScreen extends StatelessWidget {
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text('Confirm and Submit',
+                      child: _submitting
+                          ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white),
+                      )
+                          : const Text('Confirm and Submit',
                           style: TextStyle(
                               fontSize: 15, fontWeight: FontWeight.w700)),
                     ),
                   ),
                   TextButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed:
+                    _submitting ? null : () => Navigator.pop(context),
                     child: const Text(
                       'Edit Information',
                       style: TextStyle(
@@ -228,11 +249,11 @@ class _SectionTitle extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 10),
     child: Text(
       text,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.5,
-        color: AppTheme.textMuted,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
       ),
     ),
   );
@@ -246,12 +267,13 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         border: last
             ? null
-            : const Border(bottom: BorderSide(color: AppTheme.border)),
+            : Border(bottom: BorderSide(color: cs.outlineVariant)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -260,8 +282,7 @@ class _Row extends StatelessWidget {
             flex: 4,
             child: Text(
               label,
-              style:
-              const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
           ),
           Expanded(
@@ -269,10 +290,10 @@ class _Row extends StatelessWidget {
             child: Text(
               value,
               textAlign: TextAlign.right,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,
-                color: AppTheme.textDark,
+                color: cs.onSurface,
               ),
             ),
           ),

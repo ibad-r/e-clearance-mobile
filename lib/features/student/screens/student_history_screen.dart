@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../core/theme/app_theme.dart';
 import '../state/student_state.dart';
 
 class StudentHistoryScreen extends StatelessWidget {
@@ -9,6 +8,7 @@ class StudentHistoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final history = context.watch<StudentState>().history;
+    final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
       body: SafeArea(
@@ -17,22 +17,23 @@ class StudentHistoryScreen extends StatelessWidget {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(8, 8, 20, 8),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(bottom: BorderSide(color: AppTheme.border)),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                border: Border(bottom: BorderSide(color: cs.outlineVariant)),
               ),
               child: Row(
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back, size: 22),
+                    tooltip: 'Back',
                     onPressed: () => Navigator.pop(context),
                   ),
-                  const Text(
+                  Text(
                     'Clearance History',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: AppTheme.textDark,
+                      color: cs.onSurface,
                     ),
                   ),
                 ],
@@ -60,28 +61,29 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    final cs = Theme.of(context).colorScheme;
+    return Center(
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.history, size: 40, color: AppTheme.textMuted),
-            SizedBox(height: 12),
+            Icon(Icons.history, size: 40, color: cs.onSurfaceVariant),
+            const SizedBox(height: 12),
             Text(
               'No clearance history yet',
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: AppTheme.textDark,
+                color: cs.onSurface,
               ),
             ),
-            SizedBox(height: 6),
+            const SizedBox(height: 6),
             Text(
               'Past clearance requests will appear here once the server '
                   'reports them.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12.5, color: AppTheme.textMuted),
+              style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
             ),
           ],
         ),
@@ -96,13 +98,14 @@ class _HistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.border),
+        border: Border.all(color: cs.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -113,10 +116,10 @@ class _HistoryCard extends StatelessWidget {
               Flexible(
                 child: Text(
                   item.referenceNumber,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11.5,
                     fontFamily: 'monospace',
-                    color: AppTheme.textMuted,
+                    color: cs.onSurfaceVariant,
                   ),
                 ),
               ),
@@ -124,21 +127,21 @@ class _HistoryCard extends StatelessWidget {
                 padding:
                 const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEEF1F5),
+                  color: cs.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.lock_outline,
-                        size: 12, color: AppTheme.textMuted),
+                    Icon(Icons.lock_outline,
+                        size: 12, color: cs.onSurfaceVariant),
                     const SizedBox(width: 4),
                     Text(
                       item.statusLabel,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: AppTheme.textMuted,
+                        color: cs.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -149,16 +152,16 @@ class _HistoryCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             item.type,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w700,
-              color: AppTheme.textDark,
+              color: cs.onSurface,
             ),
           ),
           const SizedBox(height: 2),
           Text(
             item.dateLabel,
-            style: const TextStyle(fontSize: 11.5, color: AppTheme.textMuted),
+            style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
           ),
         ],
       ),
