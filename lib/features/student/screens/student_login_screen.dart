@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../core/app_state.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/routes.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -11,7 +14,7 @@ class StudentLoginScreen extends StatefulWidget {
 
 class _StudentLoginScreenState extends State<StudentLoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _identifierCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
 
   bool _obscure = true;
@@ -19,21 +22,18 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
   String? _error;
 
   static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-  static final _sapRegex = RegExp(r'^\d{4,10}$');
 
   @override
   void dispose() {
-    _identifierCtrl.dispose();
+    _emailCtrl.dispose();
     _passwordCtrl.dispose();
     super.dispose();
   }
 
-  String? _validateIdentifier(String? value) {
+  String? _validateEmail(String? value) {
     final v = value?.trim() ?? '';
-    if (v.isEmpty) return 'Enter your university email or SAP ID';
-    if (!_emailRegex.hasMatch(v) && !_sapRegex.hasMatch(v)) {
-      return 'Enter a valid university email or SAP ID';
-    }
+    if (v.isEmpty) return 'Enter your university email';
+    if (!_emailRegex.hasMatch(v)) return 'Enter a valid email address';
     return null;
   }
 
@@ -49,14 +49,33 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _loading = true);
-    // TODO(student-api): call the Student auth API once Ibad shares the
-    // agreed contract. No authentication is simulated here.
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
-    setState(() {
-      _loading = false;
-      _error = 'Student sign-in is not connected to the server yet.';
-    });
+    final app = context.read<AppState>();
+    try {
+      await app.studentLogin(_emailCtrl.text, _passwordCtrl.text);
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.studentHome,
+            (route) => false,
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      if (e.isRoleMismatch) {
+        setState(() => _loading = false);
+        Navigator.pushNamed(context, AppRoutes.studentAccessDenied);
+      } else {
+        setState(() {
+          _loading = false;
+          _error = e.message;
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Something went wrong. Please try again.';
+      });
+    }
   }
 
   void _forgotPassword() {
@@ -86,8 +105,6 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
           padding: const EdgeInsets.fromLTRB(20, 32, 20, 24),
           child: Form(
             key: _formKey,
-            // Errors update while the user edits, so a fixed field
-            // loses its red error immediately.
             autovalidateMode: AutovalidateMode.onUserInteraction,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -124,7 +141,7 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
                 const SizedBox(height: 8),
                 Text(
                   'Riphah International University. Sign in with your '
-                      'university email or SAP ID to manage your clearance.',
+                      'university email to manage your clearance.',
                   style: TextStyle(
                     fontSize: 13,
                     height: 1.4,
@@ -132,16 +149,16 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                const _FieldLabel('University Email or SAP ID'),
+                const _FieldLabel('University Email'),
                 TextFormField(
-                  controller: _identifierCtrl,
+                  controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
                   autocorrect: false,
                   enabled: !_loading,
-                  validator: _validateIdentifier,
+                  validator: _validateEmail,
                   decoration: const InputDecoration(
-                    hintText: 'Email or SAP ID',
+                    hintText: 'Email',
                     prefixIcon: Icon(Icons.mail_outline, size: 20),
                   ),
                 ),

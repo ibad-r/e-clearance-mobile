@@ -7,7 +7,7 @@ import '../features/clearance/screens/success_screen.dart';
 import '../features/clearance/screens/progress_screen.dart';
 import '../features/role_selection/role_selection_screen.dart';
 import '../features/student/screens/student_access_denied_screen.dart';
-import '../features/student/screens/student_login_entry.dart';
+import '../features/student/screens/student_login_screen.dart';
 import '../features/student/screens/student_shell.dart';
 
 class AppRoutes {
@@ -36,7 +36,7 @@ class AppRoutes {
     review: (_) => const ReviewScreen(),
     success: (_) => const SuccessScreen(),
     progress: (_) => const ProgressScreen(),
-    studentLogin: (_) => const StudentLoginEntry(),
+    studentLogin: (_) => const StudentLoginScreen(),
     studentHome: (_) => const StudentShell(),
     studentAccessDenied: (_) => const StudentAccessDeniedScreen(),
   };

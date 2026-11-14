@@ -4,6 +4,7 @@ import '../models/clearance_request.dart';
 import '../data/clearance_repository.dart';
 import '../data/profile_repository.dart';
 import 'auth/auth_repository.dart';
+import 'auth/auth_user.dart';
 import 'network/api_client.dart';
 import 'network/api_exception.dart';
 
@@ -25,7 +26,15 @@ class AppState extends ChangeNotifier {
   late final ProfileRepository _profile;
   late final ClearanceRepository _clearance;
 
+  /// Shared HTTP client. The Student module reuses it, so there is only one
+  /// client and one token store in the app.
+  ApiClient get apiClient => _api;
+
   Employee? employee;
+
+  /// Set when a Student is signed in. Employee data is not touched.
+  AuthUser? studentUser;
+  bool get isStudentSignedIn => studentUser != null;
 
   /// The employee's current case, loaded from the backend.
   ClearanceRequest? activeRequest;
@@ -61,10 +70,33 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Student sign-in. Email and password only. If the account is not a
+  /// STUDENT, AuthRepository throws a ROLE_MISMATCH error and saves nothing.
+  Future<void> studentLogin(String email, String password) async {
+    _clearLocalData();
+    final user = await _auth.login(
+      email: email,
+      password: password,
+      expectedRole: 'STUDENT',
+    );
+    studentUser = user;
+    sessionExpired = false;
+    notifyListeners();
+  }
+
   /// Call when the app starts. Returns true if a saved session is still valid.
   Future<bool> restoreSession() async {
     final user = await _auth.restoreSession();
     if (user == null) return false;
+
+    // A saved Student session must not be treated as an Employee session.
+    if (user.role == 'STUDENT') {
+      studentUser = user;
+      sessionExpired = false;
+      notifyListeners();
+      return true;
+    }
+
     final profile = await _profile.getProfile();
     employee = Employee.fromProfile(profile, email: user.email);
     sessionExpired = false;
@@ -127,6 +159,7 @@ class AppState extends ChangeNotifier {
 
   void _clearLocalData() {
     employee = null;
+    studentUser = null;
     activeRequest = null;
     casesError = null;
     draft.clear();

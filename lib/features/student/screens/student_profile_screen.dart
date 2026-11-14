@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/app_state.dart';
 import '../../../core/routes.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/theme/theme_controller.dart';
@@ -18,11 +19,11 @@ class StudentProfileScreen extends StatelessWidget {
     return (first + last).toUpperCase();
   }
 
-  void _goToRoleSelection(BuildContext context) {
-    // TODO(student-api): clear the Student session here once Student login
-    // is integrated. There is no Student session yet.
-    Navigator.pushNamedAndRemoveUntil(
-      context,
+  /// Clears the saved session first, so the next app start does not restore it.
+  Future<void> _goToRoleSelection(BuildContext context) async {
+    final nav = Navigator.of(context);
+    await context.read<AppState>().logout();
+    nav.pushNamedAndRemoveUntil(
       AppRoutes.roleSelection,
           (route) => false,
     );

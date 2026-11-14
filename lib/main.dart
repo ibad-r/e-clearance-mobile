@@ -71,6 +71,12 @@ class _MyAppState extends State<MyApp> {
     super.dispose();
   }
 
+  String get _initialRoute {
+    if (_state.employee != null) return AppRoutes.dashboard;
+    if (_state.isStudentSignedIn) return AppRoutes.studentHome;
+    return AppRoutes.roleSelection;
+  }
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -87,9 +93,7 @@ class _MyAppState extends State<MyApp> {
           themeMode: themeCtrl.mode,
           navigatorKey: _navigatorKey,
           scaffoldMessengerKey: _messengerKey,
-          initialRoute: _state.employee == null
-              ? AppRoutes.roleSelection
-              : AppRoutes.dashboard,
+          initialRoute: _initialRoute,
           routes: AppRoutes.table,
           // Shows a spinner until the saved session has been checked.
           builder: (context, child) => _ready
