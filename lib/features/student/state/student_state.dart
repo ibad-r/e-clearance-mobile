@@ -1,4 +1,7 @@
 import 'package:flutter/foundation.dart';
+import '../../../core/network/api_exception.dart';
+import '../data/student_repository.dart';
+import '../models/student_api_models.dart';
 
 enum ClearanceReason { degreeCompleted, discontinuingStudies }
 
@@ -6,9 +9,25 @@ extension ClearanceReasonLabel on ClearanceReason {
   String get label => this == ClearanceReason.degreeCompleted
       ? 'Degree Completed'
       : 'Discontinuing Studies';
+
+  /// Literal sent to the server (proposed contract values).
+  String get apiValue => this == ClearanceReason.degreeCompleted
+      ? StudentReasons.degreeCompleted
+      : StudentReasons.discontinuingStudies;
 }
 
-enum AppearanceChoice { light, dark, system }
+enum LoadState { loading, ready, error }
+
+enum SubmitOutcome { success, conflict, failed }
+
+enum DepartmentStatus {
+  pending,
+  inReview,
+  cleared,
+  actionRequired,
+  notRequired,
+  unknown,
+}
 
 /// Values the student types in the request form. Kept here so they survive
 /// navigation between the form and the review screen.
@@ -18,22 +37,32 @@ class StudentRequestDraft {
   String program = '';
   String semester = '';
   ClearanceReason? reason;
+
+  void clear() {
+    registrationNumber = '';
+    fatherName = '';
+    program = '';
+    semester = '';
+    reason = null;
+  }
 }
 
 class StudentProfile {
   const StudentProfile({
     required this.name,
     required this.sapId,
-    required this.program,
-    this.registrationNumber,
     this.email,
+    this.program,
+    this.registrationNumber,
   });
 
   final String name;
   final String sapId;
-  final String program;
-  final String? registrationNumber;
   final String? email;
+
+  /// Not provided by GET /student/profile, so they stay null.
+  final String? program;
+  final String? registrationNumber;
 }
 
 class StudentHistoryItem {
@@ -51,7 +80,6 @@ class StudentHistoryItem {
 }
 
 /// The real result returned by the server after a request is submitted.
-/// Stays null until the Student API is integrated.
 class StudentSubmission {
   const StudentSubmission({
     required this.referenceNumber,
@@ -63,8 +91,6 @@ class StudentSubmission {
   final String submittedOn;
   final String status;
 }
-
-enum DepartmentStatus { pending, cleared, notRequired }
 
 /// One department's status as reported by the server.
 class DepartmentStatusItem {
@@ -79,104 +105,352 @@ class DepartmentStatusItem {
   final String? updateText;
 }
 
-/// The student's current request and department statuses, as reported by the
-/// server. Stays null until the Student API is integrated.
+/// The student's current request and department statuses.
 class StudentRequestStatus {
   const StudentRequestStatus({
+    required this.requestId,
     required this.referenceNumber,
     required this.submittedOn,
     required this.overallStatus,
     required this.departments,
   });
 
+  final String requestId;
   final String referenceNumber;
   final String submittedOn;
   final String overallStatus;
   final List<DepartmentStatusItem> departments;
 }
 
-enum DashboardLoadState { ready, loading, error }
+/// Full request record from GET /student/requests/{id}.
+class StudentRequestDetail {
+  const StudentRequestDetail({
+    required this.referenceNumber,
+    required this.submittedOn,
+    required this.overallStatus,
+    required this.reasonLabel,
+    required this.departments,
+    this.studentName,
+    this.sapId,
+    this.registrationNumber,
+    this.fatherName,
+    this.program,
+    this.semester,
+  });
 
-/// Holds Student data. Everything starts empty and is filled by the Student
-/// API later (not available yet, so no fake data is created here).
-class StudentState extends ChangeNotifier {
-  StudentProfile? profile;
-  bool hasActiveRequest = false;
-  List<StudentHistoryItem> history = const [];
-  StudentSubmission? lastSubmission;
-  StudentRequestStatus? currentRequest;
-  final StudentRequestDraft draft = StudentRequestDraft();
+  final String referenceNumber;
+  final String submittedOn;
+  final String overallStatus;
+  final String reasonLabel;
+  final List<DepartmentStatusItem> departments;
+  final String? studentName;
+  final String? sapId;
+  final String? registrationNumber;
+  final String? fatherName;
+  final String? program;
+  final String? semester;
+}
 
-  AppearanceChoice _appearance = AppearanceChoice.light;
-  AppearanceChoice get appearance => _appearance;
+// ---------------------------------------------------------------------------
+// Mapping helpers (server data -> UI models)
+// ---------------------------------------------------------------------------
+const _months = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
 
-  void setAppearance(AppearanceChoice value) {
-    _appearance = value;
-    notifyListeners();
-  }
+String _fmtDate(DateTime? d) {
+  if (d == null) return 'Not available';
+  final l = d.toLocal();
+  return '${l.day} ${_months[l.month - 1]} ${l.year}';
+}
 
-  // ---- Dashboard load state (loading / ready / error) ----
-  DashboardLoadState dashboardLoad = DashboardLoadState.ready;
-  String? dashboardError;
+String _reasonLabel(String raw) => switch (raw) {
+  StudentReasons.degreeCompleted => 'Degree Completed',
+  StudentReasons.discontinuingStudies => 'Discontinuing Studies',
+  _ => raw,
+};
 
-  /// True only while the local DEMO/PREVIEW sample is shown (Phase 1).
-  bool isPreview = false;
+DepartmentStatus _mapStatus(DepartmentApiStatus s) => switch (s) {
+  DepartmentApiStatus.pending => DepartmentStatus.pending,
+  DepartmentApiStatus.inReview => DepartmentStatus.inReview,
+  DepartmentApiStatus.cleared => DepartmentStatus.cleared,
+  DepartmentApiStatus.actionRequired => DepartmentStatus.actionRequired,
+  DepartmentApiStatus.notRequired => DepartmentStatus.notRequired,
+  DepartmentApiStatus.unknown => DepartmentStatus.unknown,
+};
 
-  /// Phase 1: there is no server yet, so this only resets the local load flags.
-  /// Phase 2: load GET /student/dashboard here and set ready or error.
-  Future<void> refreshDashboard() async {
-    dashboardLoad = DashboardLoadState.loading;
-    dashboardError = null;
-    notifyListeners();
-    await Future<void>.delayed(const Duration(milliseconds: 300));
-    dashboardLoad = DashboardLoadState.ready;
-    notifyListeners();
-  }
+/// Remarks are not shown until Student visibility is confirmed.
+DepartmentStatusItem _toDept(DepartmentDto d) => DepartmentStatusItem(
+  name: d.displayName,
+  status: _mapStatus(d.status),
+  updateText:
+  d.updatedAt == null ? null : 'Updated ${_fmtDate(d.updatedAt)}',
+);
 
-  // ---- Local DEMO/PREVIEW helpers for Phase 1 screenshots (debug only) ----
-  void previewActive() {
-    isPreview = true;
-    hasActiveRequest = true;
-    dashboardLoad = DashboardLoadState.ready;
-    dashboardError = null;
-    currentRequest = const StudentRequestStatus(
-      referenceNumber: 'DEMO-0001',
-      submittedOn: 'Demo date',
-      overallStatus: 'In progress',
-      departments: [
-        DepartmentStatusItem(name: 'Library', status: DepartmentStatus.cleared),
-        DepartmentStatusItem(
-            name: 'Fee & Dues Department', status: DepartmentStatus.pending),
-        DepartmentStatusItem(
-            name: 'Student Service Department',
-            status: DepartmentStatus.pending),
-        DepartmentStatusItem(
-            name: 'Laboratory (if required)', status: DepartmentStatus.pending),
-        DepartmentStatusItem(
-            name: 'Coordination Office', status: DepartmentStatus.pending),
-      ],
+StudentRequestStatus _toStatus(
+    StudentRequestSummaryDto s, List<DepartmentDto> deps) =>
+    StudentRequestStatus(
+      requestId: s.id,
+      referenceNumber: s.requestReference,
+      submittedOn: _fmtDate(s.submittedAt),
+      overallStatus: s.isActive ? 'Active' : 'Closed',
+      departments: deps.map(_toDept).toList(),
     );
+
+StudentHistoryItem _toHistory(StudentRequestSummaryDto s) =>
+    StudentHistoryItem(
+      referenceNumber: s.requestReference,
+      type: _reasonLabel(s.reason),
+      dateLabel: _fmtDate(s.closedAt ?? s.submittedAt),
+      statusLabel: s.isActive ? 'Active' : 'Closed',
+    );
+
+StudentRequestDetail _toDetail(StudentRequestDto d) => StudentRequestDetail(
+  referenceNumber: d.summary.requestReference,
+  submittedOn: _fmtDate(d.summary.submittedAt),
+  overallStatus: d.summary.isActive ? 'Active' : 'Closed',
+  reasonLabel: _reasonLabel(d.summary.reason),
+  departments: d.departments.map(_toDept).toList(),
+  studentName: d.studentName,
+  sapId: d.sapId,
+  registrationNumber: d.registrationNumber,
+  fatherName: d.fatherName,
+  program: d.program,
+  semester: d.semester,
+);
+
+/// Safe message for the UI. Never shows raw server details.
+String _friendly(ApiException e) {
+  if (e.isNetworkError) return e.message;
+  if (e.isUnauthorized) return 'Your session has expired. Please log in again.';
+  if (e.isForbidden) return 'You do not have access to this information.';
+  if (e.isNotFound) return 'The requested record was not found.';
+  if (e.isValidation) {
+    return 'Some of the information is not valid. Please check and try again.';
+  }
+  if (e.isServerError) return 'Server error. Please try again later.';
+  return 'Something went wrong. Please try again.';
+}
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+class StudentState extends ChangeNotifier {
+  StudentState({required StudentRepository repository, String? email})
+      : _repo = repository,
+        _email = email;
+
+  final StudentRepository _repo;
+  final String? _email;
+  bool _disposed = false;
+
+  /// Set after an uncertain submit (timeout or unreadable reply). The dashboard
+  /// must be refreshed before another submit is allowed.
+  bool _mustRefreshFirst = false;
+
+  StudentProfile? profile;
+  String? profileError;
+
+  LoadState dashboardLoad = LoadState.loading;
+  String? dashboardError;
+  bool hasActiveRequest = false;
+  StudentRequestStatus? currentRequest;
+  int closedRequestCount = 0;
+  StudentHistoryItem? latestClosed;
+
+  LoadState historyLoad = LoadState.loading;
+  String? historyError;
+  List<StudentHistoryItem> history = const [];
+
+  LoadState detailLoad = LoadState.loading;
+  String? detailError;
+  StudentRequestDetail? detail;
+
+  StudentSubmission? lastSubmission;
+  final StudentRequestDraft draft = StudentRequestDraft();
+  bool isSubmitting = false;
+  String? submitError;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    // A request can finish after the screen is gone (for example after logout).
+    if (!_disposed) super.notifyListeners();
+  }
+
+  // ---- Profile: GET /student/profile ----
+  Future<void> loadProfile() async {
+    try {
+      final p = await _repo.fetchProfile();
+      profile = StudentProfile(name: p.studentName, sapId: p.sapId, email: _email);
+      profileError = null;
+    } on ApiException catch (e) {
+      profileError = e.isNotFound
+          ? 'Your student profile was not found. Contact the administration.'
+          : _friendly(e);
+    } catch (_) {
+      profileError = 'Could not load your profile.';
+    }
     notifyListeners();
   }
 
-  void previewEmpty() {
-    isPreview = false;
-    hasActiveRequest = false;
-    currentRequest = null;
-    dashboardLoad = DashboardLoadState.ready;
-    dashboardError = null;
+  // ---- Dashboard: GET /student/dashboard ----
+  Future<void> refreshDashboard() async {
+    if (dashboardLoad != LoadState.ready) {
+      dashboardLoad = LoadState.loading;
+      dashboardError = null;
+      notifyListeners();
+    }
+    try {
+      final dto = await _repo.fetchDashboard();
+      final p = dto.profile;
+      if (p != null) {
+        profile =
+            StudentProfile(name: p.studentName, sapId: p.sapId, email: _email);
+      }
+      final active = dto.activeRequest;
+      hasActiveRequest = active != null;
+      currentRequest =
+      active == null ? null : _toStatus(active, dto.departments);
+      closedRequestCount = dto.closedRequestCount;
+      final closed = dto.latestClosedRequest;
+      latestClosed = closed == null ? null : _toHistory(closed);
+      dashboardLoad = LoadState.ready;
+      dashboardError = null;
+    } on ApiException catch (e) {
+      // A failed load is an error, never "no active request".
+      dashboardLoad = LoadState.error;
+      dashboardError = _friendly(e);
+    } catch (_) {
+      dashboardLoad = LoadState.error;
+      dashboardError = 'Unexpected error. Please try again.';
+    }
     notifyListeners();
   }
 
-  void previewError() {
-    dashboardLoad = DashboardLoadState.error;
-    dashboardError =
-    'Could not load your dashboard. Check your connection and try again.';
+  // ---- History: GET /student/requests ----
+  Future<void> loadHistory() async {
+    historyLoad = LoadState.loading;
+    historyError = null;
+    notifyListeners();
+    try {
+      final list = await _repo.listRequests();
+      history = list.where((r) => !r.isActive).map(_toHistory).toList();
+      historyLoad = LoadState.ready;
+    } on ApiException catch (e) {
+      historyLoad = LoadState.error;
+      historyError = _friendly(e);
+    } catch (_) {
+      historyLoad = LoadState.error;
+      historyError = 'Unexpected error. Please try again.';
+    }
     notifyListeners();
   }
 
-  void previewLoading() {
-    dashboardLoad = DashboardLoadState.loading;
+  // ---- Request details: GET /student/requests/{id} ----
+  Future<void> loadDetail() async {
+    final id = currentRequest?.requestId;
+    if (id == null) {
+      detail = null;
+      detailLoad = LoadState.ready;
+      notifyListeners();
+      return;
+    }
+    detailLoad = LoadState.loading;
+    detailError = null;
     notifyListeners();
+    try {
+      detail = _toDetail(await _repo.fetchRequest(id));
+      detailLoad = LoadState.ready;
+    } on ApiException catch (e) {
+      detailLoad = LoadState.error;
+      detailError = e.isNotFound
+          ? 'This request could not be found.'
+          : _friendly(e);
+    } catch (_) {
+      detailLoad = LoadState.error;
+      detailError = 'Unexpected error. Please try again.';
+    }
+    notifyListeners();
+  }
+
+  // ---- Submit: POST /student/requests ----
+  Future<SubmitOutcome> submitRequest() async {
+    if (isSubmitting) return SubmitOutcome.failed; // no duplicate taps
+    final reason = draft.reason;
+    if (reason == null) {
+      submitError = 'Please select a clearance reason.';
+      notifyListeners();
+      return SubmitOutcome.failed;
+    }
+
+    isSubmitting = true;
+    submitError = null;
+    notifyListeners();
+    try {
+      if (_mustRefreshFirst) {
+        // The last submit may or may not have reached the server.
+        await refreshDashboard();
+        if (dashboardLoad == LoadState.error) {
+          submitError = 'We could not confirm your earlier submission. '
+              'Please check your connection and try again.';
+          return SubmitOutcome.failed;
+        }
+        _mustRefreshFirst = false;
+        if (hasActiveRequest) {
+          submitError = 'You already have an active clearance request.';
+          return SubmitOutcome.conflict;
+        }
+      }
+
+      final created = await _repo.createRequest(
+        registrationNumber: draft.registrationNumber,
+        fatherName: draft.fatherName,
+        program: draft.program,
+        semester: draft.semester,
+        reason: reason.apiValue,
+      );
+
+      // Success only after the server answered 201 with a valid request.
+      final s = created.summary;
+      lastSubmission = StudentSubmission(
+        referenceNumber: s.requestReference,
+        submittedOn: _fmtDate(s.submittedAt),
+        status: s.isActive ? 'Active' : 'Closed',
+      );
+      hasActiveRequest = s.isActive;
+      currentRequest = s.isActive ? _toStatus(s, created.departments) : null;
+      dashboardLoad = LoadState.ready;
+      dashboardError = null;
+      return SubmitOutcome.success;
+    } on ApiException catch (e) {
+      if (e.isActiveRequestExists) {
+        await refreshDashboard();
+        submitError = 'You already have an active clearance request.';
+        return SubmitOutcome.conflict;
+      }
+      if (e.isNetworkError) {
+        // Timeout or unreadable reply: the request may have been created.
+        _mustRefreshFirst = true;
+        submitError = '${e.message} Your request may not have been sent. '
+            'We will check before you try again.';
+        return SubmitOutcome.failed;
+      }
+      submitError = _friendly(e);
+      return SubmitOutcome.failed;
+    } catch (_) {
+      _mustRefreshFirst = true;
+      submitError = 'Unexpected error. We will check before you try again.';
+      return SubmitOutcome.failed;
+    } finally {
+      isSubmitting = false;
+      notifyListeners();
+    }
   }
 }

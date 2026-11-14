@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/app_state.dart';
+import '../data/student_repository.dart';
 import '../state/student_state.dart';
 import 'student_dashboard_screen.dart';
 import 'student_details_screen.dart';
@@ -18,8 +21,21 @@ class StudentShell extends StatefulWidget {
 }
 
 class _StudentShellState extends State<StudentShell> {
-  final StudentState _state = StudentState();
+  late final StudentState _state;
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Reuses the shared ApiClient (and its token) from AppState.
+    final app = context.read<AppState>();
+    _state = StudentState(
+      repository: StudentRepository(app.apiClient),
+      email: app.studentUser?.email,
+    );
+    unawaited(_state.loadProfile());
+    unawaited(_state.refreshDashboard());
+  }
 
   @override
   void dispose() {

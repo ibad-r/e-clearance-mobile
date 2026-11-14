@@ -98,7 +98,7 @@ class StudentProfileScreen extends StatelessWidget {
                         Text(
                           p == null
                               ? 'Profile details not available yet'
-                              : '${p.program} · Student',
+                              : 'Student',
                           style: TextStyle(
                               fontSize: 12, color: cs.onSurfaceVariant),
                         ),
