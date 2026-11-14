@@ -21,6 +21,7 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
   late final TextEditingController _semesterCtrl;
   bool _reasonMissing = false;
   bool _showBanner = false;
+  StudentSubmission? _seenSubmission;
 
   @override
   void initState() {
@@ -63,6 +64,20 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
     }
   }
 
+  /// Empties the form after a request was submitted successfully.
+  void _resetForm() {
+    _draft.clear();
+    _formKey.currentState?.reset();
+    _regCtrl.clear();
+    _fatherCtrl.clear();
+    _programCtrl.clear();
+    _semesterCtrl.clear();
+    setState(() {
+      _reasonMissing = false;
+      _showBanner = false;
+    });
+  }
+
   void _review() {
     FocusScope.of(context).unfocus();
     final fieldsOk = _formKey.currentState!.validate();
@@ -85,8 +100,21 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final profile = context.watch<StudentState>().profile;
+    final state = context.watch<StudentState>();
+    final profile = state.profile;
     final cs = Theme.of(context).colorScheme;
+
+    // A new submission result means the form must start empty again.
+    if (!identical(state.lastSubmission, _seenSubmission)) {
+      _seenSubmission = state.lastSubmission;
+      if (_seenSubmission != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _resetForm();
+        });
+      }
+    }
+
+    final hasActive = state.hasActiveRequest;
 
     return SafeArea(
       bottom: false,
@@ -109,14 +137,14 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
             ),
           ),
           Expanded(
-            child: SingleChildScrollView(
+            child: hasActive
+                ? const _ActiveRequestNotice()
+                : SingleChildScrollView(
               keyboardDismissBehavior:
               ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
               child: Form(
                 key: _formKey,
-                // Errors update while the user edits, so a fixed field
-                // loses its red error immediately.
                 autovalidateMode: AutovalidateMode.onUserInteraction,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -132,8 +160,8 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                     Text(
                       'Step 1 of 2 · Based on the official Student '
                           'University Clearance Form.',
-                      style:
-                      TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                      style: TextStyle(
+                          fontSize: 12, color: cs.onSurfaceVariant),
                     ),
                     if (_showBanner) ...[
                       const SizedBox(height: 14),
@@ -175,10 +203,10 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                     TextFormField(
                       controller: _regCtrl,
                       textInputAction: TextInputAction.next,
-                      onChanged: (v) =>
-                          _onEdited(() => _draft.registrationNumber = v),
-                      validator: (v) =>
-                          _required(v, 'Registration number is required.'),
+                      onChanged: (v) => _onEdited(
+                              () => _draft.registrationNumber = v),
+                      validator: (v) => _required(
+                          v, 'Registration number is required.'),
                       decoration: const InputDecoration(
                           hintText: 'e.g. RIU-2022-CS-0000'),
                     ),
@@ -201,8 +229,10 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                     TextFormField(
                       controller: _programCtrl,
                       textInputAction: TextInputAction.next,
-                      onChanged: (v) => _onEdited(() => _draft.program = v),
-                      validator: (v) => _required(v, 'Program is required.'),
+                      onChanged: (v) =>
+                          _onEdited(() => _draft.program = v),
+                      validator: (v) =>
+                          _required(v, 'Program is required.'),
                       decoration: const InputDecoration(
                           hintText: 'e.g. BS Computer Science'),
                     ),
@@ -211,8 +241,10 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                     TextFormField(
                       controller: _semesterCtrl,
                       textInputAction: TextInputAction.done,
-                      onChanged: (v) => _onEdited(() => _draft.semester = v),
-                      validator: (v) => _required(v, 'Semester is required.'),
+                      onChanged: (v) =>
+                          _onEdited(() => _draft.semester = v),
+                      validator: (v) =>
+                          _required(v, 'Semester is required.'),
                       decoration:
                       const InputDecoration(hintText: 'e.g. 8th'),
                     ),
@@ -230,9 +262,10 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                       title: 'Degree Completed',
                       subtitle:
                       'I have completed all requirements of my degree.',
-                      selected:
-                      _draft.reason == ClearanceReason.degreeCompleted,
-                      onTap: () => _pickReason(ClearanceReason.degreeCompleted),
+                      selected: _draft.reason ==
+                          ClearanceReason.degreeCompleted,
+                      onTap: () =>
+                          _pickReason(ClearanceReason.degreeCompleted),
                     ),
                     const SizedBox(height: 10),
                     _ReasonCard(
@@ -241,15 +274,16 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                       'I am leaving my program before completing it.',
                       selected: _draft.reason ==
                           ClearanceReason.discontinuingStudies,
-                      onTap: () =>
-                          _pickReason(ClearanceReason.discontinuingStudies),
+                      onTap: () => _pickReason(
+                          ClearanceReason.discontinuingStudies),
                     ),
                     if (_reasonMissing)
                       Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
                           'Select a clearance reason.',
-                          style: TextStyle(fontSize: 12, color: cs.error),
+                          style:
+                          TextStyle(fontSize: 12, color: cs.error),
                         ),
                       ),
                   ],
@@ -257,30 +291,31 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
               ),
             ),
           ),
-          Container(
-            padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              border: Border(top: BorderSide(color: cs.outlineVariant)),
-            ),
-            child: SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: _review,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+          if (!hasActive)
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                border: Border(top: BorderSide(color: cs.outlineVariant)),
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: _review,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Review Request',
+                      style: TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700)),
                 ),
-                child: const Text('Review Request',
-                    style: TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700)),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -295,6 +330,45 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
       borderRadius: BorderRadius.circular(2),
     ),
   );
+}
+
+/// Shown instead of the form when an active request already exists.
+class _ActiveRequestNotice extends StatelessWidget {
+  const _ActiveRequestNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.assignment_turned_in_outlined,
+                size: 44, color: cs.onSurfaceVariant),
+            const SizedBox(height: 14),
+            Text(
+              'You already have an active request',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: cs.onSurface,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Only one clearance request can be active at a time. '
+                  'Follow its progress on the Dashboard or Status tab.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _SectionTitle extends StatelessWidget {
