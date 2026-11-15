@@ -15,34 +15,73 @@ class StudentReviewScreen extends StatefulWidget {
 }
 
 class _StudentReviewScreenState extends State<StudentReviewScreen> {
-  bool _submitting = false;
+  static const _missing = 'Not available yet';
 
-  void _confirmAndSubmit(BuildContext context) {
-    if (_submitting) return; // ignore repeated taps
-    setState(() => _submitting = true);
+  // Snapshot of the values being reviewed. They cannot change while this
+  // screen is open, and the form is cleared after a successful submit.
+  late final String _name;
+  late final String _sapId;
+  late final String _registration;
+  late final String _father;
+  late final String _program;
+  late final String _semester;
+  late final ClearanceReason? _reason;
 
-    // TODO(student-api): send the request to the server here once Ibad shares
-    // the agreed contract. Nothing is sent yet, and no result is faked.
-    // Phase 2: await POST /student/requests, and set _submitting = false on error.
+  @override
+  void initState() {
+    super.initState();
     final state = context.read<StudentState>();
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ChangeNotifierProvider<StudentState>.value(
-          value: state,
-          child: StudentConfirmationScreen(onGoToTab: widget.onGoToTab),
-        ),
-      ),
-    );
+    final d = state.draft;
+    _name = state.profile?.name ?? _missing;
+    _sapId = state.profile?.sapId ?? _missing;
+    _registration = d.registrationNumber;
+    _father = d.fatherName;
+    _program = d.program;
+    _semester = d.semester;
+    _reason = d.reason;
+    state.submitError = null;
+  }
+
+  Future<void> _confirmAndSubmit() async {
+    final state = context.read<StudentState>();
+    if (state.isSubmitting) return; // ignore repeated taps
+    final nav = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+
+    final outcome = await state.submitRequest();
+    if (!mounted) return;
+
+    switch (outcome) {
+      case SubmitOutcome.success:
+        state.draft.clear();
+        nav.pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => ChangeNotifierProvider<StudentState>.value(
+              value: state,
+              child: StudentConfirmationScreen(onGoToTab: widget.onGoToTab),
+            ),
+          ),
+        );
+      case SubmitOutcome.conflict:
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(state.submitError ??
+                'You already have an active clearance request.'),
+          ),
+        );
+        nav.pop();
+        widget.onGoToTab(0);
+      case SubmitOutcome.failed:
+        break; // the error is shown on this screen, the form is kept
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<StudentState>();
     final cs = Theme.of(context).colorScheme;
-    final draft = state.draft;
-    final profile = state.profile;
-    const missing = 'Not available yet';
+    final submitting = state.isSubmitting;
+    final error = state.submitError;
 
     return Scaffold(
       body: SafeArea(
@@ -60,7 +99,7 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
                   IconButton(
                     icon: const Icon(Icons.arrow_back, size: 22),
                     tooltip: 'Back to request form',
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: submitting ? null : () => Navigator.pop(context),
                   ),
                   Text(
                     'Review Request',
@@ -102,13 +141,12 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
                       ),
                       child: Column(
                         children: [
-                          _Row('Student Name', profile?.name ?? missing),
-                          _Row('SAP ID', profile?.sapId ?? missing),
-                          _Row('Registration Number',
-                              draft.registrationNumber),
-                          _Row("Father's Name", draft.fatherName),
-                          _Row('Program', draft.program),
-                          _Row('Semester', draft.semester, last: true),
+                          _Row('Student Name', _name),
+                          _Row('SAP ID', _sapId),
+                          _Row('Registration Number', _registration),
+                          _Row("Father's Name", _father),
+                          _Row('Program', _program),
+                          _Row('Semester', _semester, last: true),
                         ],
                       ),
                     ),
@@ -127,7 +165,7 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            draft.reason?.label ?? '—',
+                            _reason?.label ?? '—',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
@@ -135,7 +173,9 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
                             ),
                           ),
                           GestureDetector(
-                            onTap: () => Navigator.pop(context),
+                            onTap: submitting
+                                ? null
+                                : () => Navigator.pop(context),
                             child: const Text(
                               'Edit',
                               style: TextStyle(
@@ -149,6 +189,34 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
+                    if (error != null && !submitting) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: cs.errorContainer,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: cs.error),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.error_outline,
+                                size: 18, color: cs.error),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                error,
+                                style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: cs.onErrorContainer),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
@@ -192,8 +260,7 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
                     width: double.infinity,
                     height: 48,
                     child: ElevatedButton(
-                      onPressed:
-                      _submitting ? null : () => _confirmAndSubmit(context),
+                      onPressed: submitting ? null : _confirmAndSubmit,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.primary,
                         foregroundColor: Colors.white,
@@ -201,7 +268,7 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: _submitting
+                      child: submitting
                           ? const SizedBox(
                         width: 20,
                         height: 20,
@@ -215,7 +282,7 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
                   ),
                   TextButton(
                     onPressed:
-                    _submitting ? null : () => Navigator.pop(context),
+                    submitting ? null : () => Navigator.pop(context),
                     child: const Text(
                       'Edit Information',
                       style: TextStyle(

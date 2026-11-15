@@ -1,13 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../state/student_state.dart';
+import '../widgets/student_widgets.dart';
 
-class StudentHistoryScreen extends StatelessWidget {
+class StudentHistoryScreen extends StatefulWidget {
   const StudentHistoryScreen({super.key});
 
   @override
+  State<StudentHistoryScreen> createState() => _StudentHistoryScreenState();
+}
+
+class _StudentHistoryScreenState extends State<StudentHistoryScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // After the first frame, so listeners are not notified during build.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<StudentState>().loadHistory();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final history = context.watch<StudentState>().history;
+    final state = context.watch<StudentState>();
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -39,20 +54,51 @@ class StudentHistoryScreen extends StatelessWidget {
                 ],
               ),
             ),
-            Expanded(
-              child: history.isEmpty
-                  ? const _EmptyState()
-                  : ListView.separated(
-                padding: const EdgeInsets.all(20),
-                itemCount: history.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                itemBuilder: (_, i) => _HistoryCard(item: history[i]),
-              ),
-            ),
+            Expanded(child: _body(context, state)),
           ],
         ),
       ),
     );
+  }
+
+  Widget _body(BuildContext context, StudentState state) {
+    switch (state.historyLoad) {
+      case LoadState.loading:
+        return const Center(child: CircularProgressIndicator());
+      case LoadState.error:
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: CardBox(
+              child: ErrorRetry(
+                message: state.historyError ??
+                    'Could not load your clearance history.',
+                onRetry: () => state.loadHistory(),
+              ),
+            ),
+          ),
+        );
+      case LoadState.ready:
+        return RefreshIndicator(
+          onRefresh: state.loadHistory,
+          child: state.history.isEmpty
+              ? ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: const [
+              SizedBox(height: 120),
+              _EmptyState(),
+            ],
+          )
+              : ListView.separated(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(20),
+            itemCount: state.history.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (_, i) => _HistoryCard(item: state.history[i]),
+          ),
+        );
+    }
   }
 }
 
@@ -80,8 +126,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Past clearance requests will appear here once the server '
-                  'reports them.',
+              'Closed clearance requests will appear here.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
             ),
@@ -99,14 +144,8 @@ class _HistoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
+    return CardBox(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

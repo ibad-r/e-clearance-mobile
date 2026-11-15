@@ -18,7 +18,15 @@ class ApiException implements Exception {
   bool get isConflict => statusCode == 409;
   bool get isValidation => statusCode == 400 || statusCode == 422;
   bool get isServerError => (statusCode ?? 0) >= 500;
+
+  /// Employee flow.
   bool get isActiveCaseExists => code == 'ACTIVE_CASE_EXISTS';
+
+  /// Student flow (proposed code, confirm with Ibad).
+  bool get isActiveRequestExists => code == 'ACTIVE_REQUEST_EXISTS';
+
+  /// Signed in successfully, but the account has the wrong role for this app path.
+  bool get isRoleMismatch => code == 'ROLE_MISMATCH';
 
   factory ApiException.network(String message) =>
       ApiException(message: message);

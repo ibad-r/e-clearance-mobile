@@ -15,9 +15,12 @@ class AuthRepository {
 
   AuthUser? currentUser;
 
+  /// Email and password only. [expectedRole] is a navigation check; the
+  /// server stays the authority on what the account may do.
   Future<AuthUser> login({
     required String email,
     required String password,
+    String expectedRole = 'EMPLOYEE',
   }) async {
     final dynamic data;
     try {
@@ -44,10 +47,14 @@ class AuthRepository {
 
     final user =
     AuthUser.fromJson(Map<String, dynamic>.from(data['user'] as Map));
-    if (user.role != 'EMPLOYEE') {
+    if (user.role != expectedRole) {
+      // The token is discarded: nothing is saved for the wrong role.
       throw ApiException(
-        message: 'This app is for employee accounts only.',
+        message: expectedRole == 'STUDENT'
+            ? 'This account is not registered as a student.'
+            : 'This app is for employee accounts only.',
         statusCode: 403,
+        code: 'ROLE_MISMATCH',
       );
     }
 

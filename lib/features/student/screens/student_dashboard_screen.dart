@@ -1,8 +1,8 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../state/student_state.dart';
+import '../widgets/student_widgets.dart';
 
 class StudentDashboardScreen extends StatelessWidget {
   const StudentDashboardScreen({
@@ -20,8 +20,7 @@ class StudentDashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<StudentState>();
     final cs = Theme.of(context).colorScheme;
-    final profile = state.profile;
-    final ready = state.dashboardLoad == DashboardLoadState.ready;
+    final ready = state.dashboardLoad == LoadState.ready;
 
     return SafeArea(
       child: RefreshIndicator(
@@ -32,7 +31,7 @@ class StudentDashboardScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _Header(profile: profile),
+              _Header(profile: state.profile),
               const SizedBox(height: 20),
               _RequestSection(state: state),
               const SizedBox(height: 14),
@@ -99,39 +98,11 @@ class StudentDashboardScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 4),
-              if (state.history.isEmpty)
-                const _EmptyHistory()
-              else
-                ...state.history.take(3).map((h) => _HistoryTile(item: h)),
-              if (kDebugMode) _DebugPreviewPanel(state: state),
+              if (ready) _HistoryPreview(state: state),
             ],
           ),
         ),
       ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Shared card container (theme-aware, works in Light and Dark)
-// ---------------------------------------------------------------------------
-class _CardBox extends StatelessWidget {
-  const _CardBox({required this.child, this.padding = const EdgeInsets.all(16)});
-  final Widget child;
-  final EdgeInsets padding;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant),
-      ),
-      child: child,
     );
   }
 }
@@ -181,7 +152,7 @@ class _Header extends StatelessWidget {
               Text(
                 p == null
                     ? 'Profile details not available yet'
-                    : 'SAP ${p.sapId} · ${p.program}',
+                    : 'SAP ${p.sapId}',
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
               ),
             ],
@@ -189,35 +160,6 @@ class _Header extends StatelessWidget {
         ),
       ],
     );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Current request area: loading / error / active / empty
-// ---------------------------------------------------------------------------
-class _RequestSection extends StatelessWidget {
-  const _RequestSection({required this.state});
-  final StudentState state;
-
-  @override
-  Widget build(BuildContext context) {
-    switch (state.dashboardLoad) {
-      case DashboardLoadState.loading:
-        return const _LoadingCard();
-      case DashboardLoadState.error:
-        return _ErrorCard(
-          message: state.dashboardError ??
-              'Could not load your dashboard. Please try again.',
-          onRetry: state.refreshDashboard,
-        );
-      case DashboardLoadState.ready:
-        return state.hasActiveRequest
-            ? _ActiveRequestCard(
-          request: state.currentRequest,
-          isPreview: state.isPreview,
-        )
-            : const _EmptyRequestCard();
-    }
   }
 }
 
@@ -238,51 +180,32 @@ class _CardLabel extends StatelessWidget {
   }
 }
 
-class _LoadingCard extends StatelessWidget {
-  const _LoadingCard();
+/// Loading / error / active / empty. A failed load is never shown as empty.
+class _RequestSection extends StatelessWidget {
+  const _RequestSection({required this.state});
+  final StudentState state;
 
   @override
   Widget build(BuildContext context) {
-    return const _CardBox(
-      padding: EdgeInsets.symmetric(vertical: 36, horizontal: 16),
-      child: Center(child: CircularProgressIndicator()),
-    );
-  }
-}
-
-class _ErrorCard extends StatelessWidget {
-  const _ErrorCard({required this.message, required this.onRetry});
-  final String message;
-  final Future<void> Function() onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return _CardBox(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _CardLabel(),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Icon(Icons.error_outline, color: cs.error),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(message,
-                    style: TextStyle(fontSize: 13, color: cs.onSurface)),
-              ),
-            ],
+    switch (state.dashboardLoad) {
+      case LoadState.loading:
+        return const CardBox(
+          padding: EdgeInsets.symmetric(vertical: 36, horizontal: 16),
+          child: Center(child: CircularProgressIndicator()),
+        );
+      case LoadState.error:
+        return CardBox(
+          child: ErrorRetry(
+            message: state.dashboardError ??
+                'Could not load your dashboard. Please try again.',
+            onRetry: () => state.refreshDashboard(),
           ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh, size: 18),
-            label: const Text('Retry'),
-          ),
-        ],
-      ),
-    );
+        );
+      case LoadState.ready:
+        return state.hasActiveRequest
+            ? _ActiveRequestCard(request: state.currentRequest)
+            : const _EmptyRequestCard();
+    }
   }
 }
 
@@ -292,7 +215,7 @@ class _EmptyRequestCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return _CardBox(
+    return CardBox(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -336,38 +259,20 @@ class _EmptyRequestCard extends StatelessWidget {
 }
 
 class _ActiveRequestCard extends StatelessWidget {
-  const _ActiveRequestCard({required this.request, required this.isPreview});
+  const _ActiveRequestCard({required this.request});
   final StudentRequestStatus? request;
-  final bool isPreview;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final r = request;
-    return _CardBox(
+    if (r == null) return const _EmptyRequestCard();
+
+    return CardBox(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const _CardLabel(),
-          if (isPreview) ...[
-            const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-              decoration: BoxDecoration(
-                color: cs.tertiaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'DEMO / PREVIEW - local sample, not live server data',
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w700,
-                  color: cs.onTertiaryContainer,
-                ),
-              ),
-            ),
-          ],
           const SizedBox(height: 12),
           Row(
             children: [
@@ -376,7 +281,7 @@ class _ActiveRequestCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      r?.referenceNumber ?? 'Reference not available',
+                      r.referenceNumber,
                       style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w800,
@@ -384,44 +289,29 @@ class _ActiveRequestCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      r == null
-                          ? 'Request details not available yet'
-                          : 'Submitted: ${r.submittedOn}',
+                      'Submitted: ${r.submittedOn}',
                       style:
                       TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                     ),
                   ],
                 ),
               ),
-              if (r != null)
-                Container(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: cs.primaryContainer,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    r.overallStatus,
-                    style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w700,
-                        color: cs.onPrimaryContainer),
-                  ),
-                ),
+              PillBadge(label: r.overallStatus, color: cs.primary),
             ],
           ),
-          if (r != null && r.departments.isNotEmpty) ...[
-            const SizedBox(height: 16),
-            Text('Department progress',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: cs.onSurface)),
-            const SizedBox(height: 8),
-            // Each department is shown on its own. No percentage, no locking.
+          const SizedBox(height: 16),
+          Text('Department progress',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface)),
+          const SizedBox(height: 8),
+          // Exactly what the server returned. No percentage, no locking.
+          if (r.departments.isEmpty)
+            Text('Department statuses are not available yet.',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))
+          else
             for (final d in r.departments) _DepartmentRow(item: d),
-          ],
         ],
       ),
     );
@@ -435,14 +325,7 @@ class _DepartmentRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final (String label, IconData icon, Color color) = switch (item.status) {
-      DepartmentStatus.cleared =>
-      ('Cleared', Icons.check_circle, Colors.green.shade600),
-      DepartmentStatus.pending =>
-      ('Pending', Icons.schedule, cs.onSurfaceVariant),
-      DepartmentStatus.notRequired =>
-      ('Not required', Icons.remove_circle_outline, cs.onSurfaceVariant),
-    };
+    final style = StatusStyle.of(item.status, cs);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -453,7 +336,7 @@ class _DepartmentRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: color),
+          Icon(style.icon, size: 18, color: style.color),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -464,111 +347,64 @@ class _DepartmentRow extends StatelessWidget {
                   color: cs.onSurface),
             ),
           ),
-          Text(label,
+          Text(style.label,
               style: TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: style.color)),
         ],
       ),
     );
   }
 }
 
-class _EmptyHistory extends StatelessWidget {
-  const _EmptyHistory();
-
-  @override
-  Widget build(BuildContext context) {
-    return _CardBox(
-      child: Text(
-        'No clearance history yet.',
-        style: TextStyle(
-            fontSize: 13,
-            color: Theme.of(context).colorScheme.onSurfaceVariant),
-      ),
-    );
-  }
-}
-
-class _HistoryTile extends StatelessWidget {
-  const _HistoryTile({required this.item});
-  final StudentHistoryItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item.referenceNumber,
-                    style:
-                    TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                const SizedBox(height: 2),
-                Text(item.type,
-                    style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: cs.onSurface)),
-                const SizedBox(height: 2),
-                Text('${item.dateLabel} · ${item.statusLabel}',
-                    style:
-                    TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Debug-only panel for Phase 1 screenshots. Not shown in release builds.
-// Remove it (or keep it hidden) when the real API is connected.
-// ---------------------------------------------------------------------------
-class _DebugPreviewPanel extends StatelessWidget {
-  const _DebugPreviewPanel({required this.state});
+class _HistoryPreview extends StatelessWidget {
+  const _HistoryPreview({required this.state});
   final StudentState state;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('DEBUG: preview dashboard states (local only)',
-              style: TextStyle(
-                  fontSize: 11,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant)),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
+    final cs = Theme.of(context).colorScheme;
+    final latest = state.latestClosed;
+    if (state.closedRequestCount == 0 || latest == null) {
+      return CardBox(
+        child: Text(
+          'No clearance history yet.',
+          style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CardBox(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ActionChip(
-                  label: const Text('Active (DEMO)'),
-                  onPressed: state.previewActive),
-              ActionChip(
-                  label: const Text('Empty'), onPressed: state.previewEmpty),
-              ActionChip(
-                  label: const Text('Loading'),
-                  onPressed: state.previewLoading),
-              ActionChip(
-                  label: const Text('Error'), onPressed: state.previewError),
+              Text(latest.referenceNumber,
+                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+              const SizedBox(height: 2),
+              Text(latest.type,
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface)),
+              const SizedBox(height: 2),
+              Text('${latest.dateLabel} · ${latest.statusLabel}',
+                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
             ],
           ),
-        ],
-      ),
+        ),
+        if (state.closedRequestCount > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 6, left: 4),
+            child: Text(
+              '${state.closedRequestCount} closed requests in total',
+              style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
+            ),
+          ),
+      ],
     );
   }
 }
