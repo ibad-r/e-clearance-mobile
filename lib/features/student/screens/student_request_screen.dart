@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../state/student_state.dart';
+import '../widgets/student_profile_notice.dart';
 
 class StudentRequestScreen extends StatefulWidget {
   const StudentRequestScreen({super.key, required this.onReview});
@@ -15,10 +16,6 @@ class StudentRequestScreen extends StatefulWidget {
 class _StudentRequestScreenState extends State<StudentRequestScreen> {
   final _formKey = GlobalKey<FormState>();
   late final StudentRequestDraft _draft;
-  late final TextEditingController _regCtrl;
-  late final TextEditingController _fatherCtrl;
-  late final TextEditingController _programCtrl;
-  late final TextEditingController _semesterCtrl;
   bool _reasonMissing = false;
   bool _showBanner = false;
   StudentSubmission? _seenSubmission;
@@ -27,51 +24,12 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
   void initState() {
     super.initState();
     _draft = context.read<StudentState>().draft;
-    _regCtrl = TextEditingController(text: _draft.registrationNumber);
-    _fatherCtrl = TextEditingController(text: _draft.fatherName);
-    _programCtrl = TextEditingController(text: _draft.program);
-    _semesterCtrl = TextEditingController(text: _draft.semester);
   }
 
-  @override
-  void dispose() {
-    _regCtrl.dispose();
-    _fatherCtrl.dispose();
-    _programCtrl.dispose();
-    _semesterCtrl.dispose();
-    super.dispose();
-  }
-
-  String? _required(String? v, String message) {
-    if (v == null || v.trim().isEmpty) return message;
-    return null;
-  }
-
-  /// True when every field has a value and a reason is chosen.
-  /// Used only to hide the red banner once the user has fixed everything.
-  bool _allValid() =>
-      _draft.registrationNumber.trim().isNotEmpty &&
-          _draft.fatherName.trim().isNotEmpty &&
-          _draft.program.trim().isNotEmpty &&
-          _draft.semester.trim().isNotEmpty &&
-          _draft.reason != null;
-
-  /// Called on every edit: stores the value and clears a stale banner.
-  void _onEdited(void Function() store) {
-    store();
-    if (_showBanner && _allValid()) {
-      setState(() => _showBanner = false);
-    }
-  }
-
-  /// Empties the form after a request was submitted successfully.
+  /// Resets the request reason after a request was submitted successfully.
   void _resetForm() {
     _draft.clear();
     _formKey.currentState?.reset();
-    _regCtrl.clear();
-    _fatherCtrl.clear();
-    _programCtrl.clear();
-    _semesterCtrl.clear();
     setState(() {
       _reasonMissing = false;
       _showBanner = false;
@@ -80,7 +38,7 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
 
   void _review() {
     FocusScope.of(context).unfocus();
-    final fieldsOk = _formKey.currentState!.validate();
+    final fieldsOk = context.read<StudentState>().hasVerifiedProfile;
     final reasonOk = _draft.reason != null;
     setState(() {
       _reasonMissing = !reasonOk;
@@ -94,7 +52,7 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
     setState(() {
       _draft.reason = r;
       _reasonMissing = false; // error disappears as soon as a reason is chosen
-      if (_showBanner && _allValid()) _showBanner = false;
+      if (_showBanner) _showBanner = false;
     });
   }
 
@@ -104,7 +62,7 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
     final profile = state.profile;
     final cs = Theme.of(context).colorScheme;
 
-    // A new submission result means the form must start empty again.
+    // A new submission result resets the request reason.
     if (!identical(state.lastSubmission, _seenSubmission)) {
       _seenSubmission = state.lastSubmission;
       if (_seenSubmission != null) {
@@ -140,156 +98,130 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
             child: hasActive
                 ? const _ActiveRequestNotice()
                 : SingleChildScrollView(
-              keyboardDismissBehavior:
-              ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-              child: Form(
-                key: _formKey,
-                autovalidateMode: AutovalidateMode.onUserInteraction,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: _bar(context, true)),
-                        const SizedBox(width: 6),
-                        Expanded(child: _bar(context, false)),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Step 1 of 2 · Based on the official Student '
-                          'University Clearance Form.',
-                      style: TextStyle(
-                          fontSize: 12, color: cs.onSurfaceVariant),
-                    ),
-                    if (_showBanner) ...[
-                      const SizedBox(height: 14),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: cs.errorContainer,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: cs.error),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.warning_amber_rounded,
-                                size: 18, color: cs.error),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Please fix the highlighted fields to '
-                                    'continue.',
-                                style: TextStyle(
-                                    fontSize: 12.5,
-                                    color: cs.onErrorContainer),
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                    child: Form(
+                      key: _formKey,
+                      autovalidateMode: AutovalidateMode.onUserInteraction,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(child: _bar(context, true)),
+                              const SizedBox(width: 6),
+                              Expanded(child: _bar(context, false)),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Step 1 of 2 · Based on the official Student '
+                            'University Clearance Form.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                          if (_showBanner) ...[
+                            const SizedBox(height: 14),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: cs.errorContainer,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: cs.error),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.warning_amber_rounded,
+                                    size: 18,
+                                    color: cs.error,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Please fix the highlighted fields to '
+                                      'continue.',
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        color: cs.onErrorContainer,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    const _SectionTitle('STUDENT INFORMATION'),
-                    const _Label('SAP ID'),
-                    _LockedField(value: profile?.sapId),
-                    const SizedBox(height: 14),
-                    const _Label('Student Name'),
-                    _LockedField(value: profile?.name),
-                    const SizedBox(height: 14),
-                    const _Label('Registration Number'),
-                    TextFormField(
-                      controller: _regCtrl,
-                      textInputAction: TextInputAction.next,
-                      onChanged: (v) => _onEdited(
-                              () => _draft.registrationNumber = v),
-                      validator: (v) => _required(
-                          v, 'Registration number is required.'),
-                      decoration: const InputDecoration(
-                          hintText: 'e.g. RIU-2022-CS-0000'),
-                    ),
-                    const SizedBox(height: 14),
-                    const _Label("Father's Name"),
-                    TextFormField(
-                      controller: _fatherCtrl,
-                      textInputAction: TextInputAction.next,
-                      textCapitalization: TextCapitalization.words,
-                      onChanged: (v) =>
-                          _onEdited(() => _draft.fatherName = v),
-                      validator: (v) =>
-                          _required(v, "Father's name is required."),
-                      decoration: const InputDecoration(
-                          hintText: 'As on your official records'),
-                    ),
-                    const SizedBox(height: 22),
-                    const _SectionTitle('ACADEMIC DETAILS'),
-                    const _Label('Program'),
-                    TextFormField(
-                      controller: _programCtrl,
-                      textInputAction: TextInputAction.next,
-                      onChanged: (v) =>
-                          _onEdited(() => _draft.program = v),
-                      validator: (v) =>
-                          _required(v, 'Program is required.'),
-                      decoration: const InputDecoration(
-                          hintText: 'e.g. BS Computer Science'),
-                    ),
-                    const SizedBox(height: 14),
-                    const _Label('Semester'),
-                    TextFormField(
-                      controller: _semesterCtrl,
-                      textInputAction: TextInputAction.done,
-                      onChanged: (v) =>
-                          _onEdited(() => _draft.semester = v),
-                      validator: (v) =>
-                          _required(v, 'Semester is required.'),
-                      decoration:
-                      const InputDecoration(hintText: 'e.g. 8th'),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        'Your current or final semester.',
-                        style: TextStyle(
-                            fontSize: 11.5, color: cs.onSurfaceVariant),
+                          const SizedBox(height: 20),
+                          const StudentProfileNotice(),
+                          const _SectionTitle('STUDENT INFORMATION'),
+                          const _Label('SAP ID'),
+                          _LockedField(value: profile?.sapId),
+                          const SizedBox(height: 14),
+                          const _Label('Student Name'),
+                          _LockedField(value: profile?.name),
+                          const SizedBox(height: 14),
+                          const _Label('Registration Number'),
+                          _LockedField(value: profile?.registrationNumber),
+                          const SizedBox(height: 14),
+                          const _Label("Father's Name"),
+                          _LockedField(value: profile?.fatherName),
+                          const SizedBox(height: 22),
+                          const _SectionTitle('ACADEMIC DETAILS'),
+                          const _Label('Program'),
+                          _LockedField(value: profile?.program),
+                          const SizedBox(height: 14),
+                          const _Label('Semester'),
+                          _LockedField(value: profile?.semester),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              'Student details come from your verified university profile.',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 22),
+                          const _SectionTitle('CLEARANCE REASON'),
+                          _ReasonCard(
+                            title: 'Degree Completed',
+                            subtitle:
+                                'I have completed all requirements of my degree.',
+                            selected:
+                                _draft.reason ==
+                                ClearanceReason.degreeCompleted,
+                            onTap: () =>
+                                _pickReason(ClearanceReason.degreeCompleted),
+                          ),
+                          const SizedBox(height: 10),
+                          _ReasonCard(
+                            title: 'Discontinuing Studies',
+                            subtitle:
+                                'I am leaving my program before completing it.',
+                            selected:
+                                _draft.reason ==
+                                ClearanceReason.discontinuingStudies,
+                            onTap: () => _pickReason(
+                              ClearanceReason.discontinuingStudies,
+                            ),
+                          ),
+                          if (_reasonMissing)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                'Select a clearance reason.',
+                                style: TextStyle(fontSize: 12, color: cs.error),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 22),
-                    const _SectionTitle('CLEARANCE REASON'),
-                    _ReasonCard(
-                      title: 'Degree Completed',
-                      subtitle:
-                      'I have completed all requirements of my degree.',
-                      selected: _draft.reason ==
-                          ClearanceReason.degreeCompleted,
-                      onTap: () =>
-                          _pickReason(ClearanceReason.degreeCompleted),
-                    ),
-                    const SizedBox(height: 10),
-                    _ReasonCard(
-                      title: 'Discontinuing Studies',
-                      subtitle:
-                      'I am leaving my program before completing it.',
-                      selected: _draft.reason ==
-                          ClearanceReason.discontinuingStudies,
-                      onTap: () => _pickReason(
-                          ClearanceReason.discontinuingStudies),
-                    ),
-                    if (_reasonMissing)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          'Select a clearance reason.',
-                          style:
-                          TextStyle(fontSize: 12, color: cs.error),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
+                  ),
           ),
           if (!hasActive)
             Container(
@@ -302,17 +234,19 @@ class _StudentRequestScreenState extends State<StudentRequestScreen> {
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: _review,
+                  onPressed: state.hasVerifiedProfile ? _review : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                  child: const Text('Review Request',
-                      style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w700)),
+                  child: const Text(
+                    'Review Request',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  ),
                 ),
               ),
             ),
@@ -345,8 +279,11 @@ class _ActiveRequestNotice extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.assignment_turned_in_outlined,
-                size: 44, color: cs.onSurfaceVariant),
+            Icon(
+              Icons.assignment_turned_in_outlined,
+              size: 44,
+              color: cs.onSurfaceVariant,
+            ),
             const SizedBox(height: 14),
             Text(
               'You already have an active request',
@@ -360,7 +297,7 @@ class _ActiveRequestNotice extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               'Only one clearance request can be active at a time. '
-                  'Follow its progress on the Dashboard or Status tab.',
+              'Follow its progress on the Dashboard or Status tab.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant),
             ),
@@ -428,11 +365,13 @@ class _LockedField extends StatelessWidget {
         children: [
           Icon(Icons.lock_outline, size: 16, color: cs.onSurfaceVariant),
           const SizedBox(width: 8),
-          Text(
-            hasValue ? value! : 'Not available yet',
-            style: TextStyle(
-              fontSize: 14,
-              color: hasValue ? cs.onSurface : cs.onSurfaceVariant,
+          Expanded(
+            child: Text(
+              hasValue ? value! : 'Not available yet',
+              style: TextStyle(
+                fontSize: 14,
+                color: hasValue ? cs.onSurface : cs.onSurfaceVariant,
+              ),
             ),
           ),
         ],
@@ -486,15 +425,19 @@ class _ReasonCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: cs.onSurface)),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: TextStyle(
-                          fontSize: 12, color: cs.onSurfaceVariant)),
+                  Text(
+                    subtitle,
+                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                  ),
                 ],
               ),
             ),

@@ -10,7 +10,7 @@ extension ClearanceReasonLabel on ClearanceReason {
       ? 'Degree Completed'
       : 'Discontinuing Studies';
 
-  /// Literal sent to the server (proposed contract values).
+  /// Literal sent to the server (confirmed contract values).
   String get apiValue => this == ClearanceReason.degreeCompleted
       ? StudentReasons.degreeCompleted
       : StudentReasons.discontinuingStudies;
@@ -29,40 +29,42 @@ enum DepartmentStatus {
   unknown,
 }
 
-/// Values the student types in the request form. Kept here so they survive
-/// navigation between the form and the review screen.
+/// Only the request-specific reason is editable.
 class StudentRequestDraft {
-  String registrationNumber = '';
-  String fatherName = '';
-  String program = '';
-  String semester = '';
   ClearanceReason? reason;
 
-  void clear() {
-    registrationNumber = '';
-    fatherName = '';
-    program = '';
-    semester = '';
-    reason = null;
-  }
+  void clear() => reason = null;
 }
 
 class StudentProfile {
   const StudentProfile({
     required this.name,
     required this.sapId,
+    required this.registrationNumber,
+    required this.fatherName,
+    required this.program,
+    required this.semester,
     this.email,
-    this.program,
-    this.registrationNumber,
   });
 
   final String name;
   final String sapId;
+  final String registrationNumber;
+  final String fatherName;
+  final String program;
+  final String semester;
   final String? email;
 
-  /// Not provided by GET /student/profile, so they stay null.
-  final String? program;
-  final String? registrationNumber;
+  factory StudentProfile.fromDto(StudentProfileDto dto, {String? email}) =>
+      StudentProfile(
+        name: dto.studentName,
+        sapId: dto.sapId,
+        registrationNumber: dto.registrationNumber,
+        fatherName: dto.fatherName,
+        program: dto.program,
+        semester: dto.semester,
+        email: email,
+      );
 }
 
 class StudentHistoryItem {
@@ -155,8 +157,18 @@ class StudentRequestDetail {
 // Mapping helpers (server data -> UI models)
 // ---------------------------------------------------------------------------
 const _months = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
 String _fmtDate(DateTime? d) {
@@ -184,27 +196,26 @@ DepartmentStatus _mapStatus(DepartmentApiStatus s) => switch (s) {
 DepartmentStatusItem _toDept(DepartmentDto d) => DepartmentStatusItem(
   name: d.displayName,
   status: _mapStatus(d.status),
-  updateText:
-  d.updatedAt == null ? null : 'Updated ${_fmtDate(d.updatedAt)}',
+  updateText: d.updatedAt == null ? null : 'Updated ${_fmtDate(d.updatedAt)}',
 );
 
 StudentRequestStatus _toStatus(
-    StudentRequestSummaryDto s, List<DepartmentDto> deps) =>
-    StudentRequestStatus(
-      requestId: s.id,
-      referenceNumber: s.requestReference,
-      submittedOn: _fmtDate(s.submittedAt),
-      overallStatus: s.isActive ? 'Active' : 'Closed',
-      departments: deps.map(_toDept).toList(),
-    );
+  StudentRequestSummaryDto s,
+  List<DepartmentDto> deps,
+) => StudentRequestStatus(
+  requestId: s.id,
+  referenceNumber: s.requestReference,
+  submittedOn: _fmtDate(s.submittedAt),
+  overallStatus: s.isActive ? 'Active' : 'Closed',
+  departments: deps.map(_toDept).toList(),
+);
 
-StudentHistoryItem _toHistory(StudentRequestSummaryDto s) =>
-    StudentHistoryItem(
-      referenceNumber: s.requestReference,
-      type: _reasonLabel(s.reason),
-      dateLabel: _fmtDate(s.closedAt ?? s.submittedAt),
-      statusLabel: s.isActive ? 'Active' : 'Closed',
-    );
+StudentHistoryItem _toHistory(StudentRequestSummaryDto s) => StudentHistoryItem(
+  referenceNumber: s.requestReference,
+  type: _reasonLabel(s.reason),
+  dateLabel: _fmtDate(s.closedAt ?? s.submittedAt),
+  statusLabel: s.isActive ? 'Active' : 'Closed',
+);
 
 StudentRequestDetail _toDetail(StudentRequestDto d) => StudentRequestDetail(
   referenceNumber: d.summary.requestReference,
@@ -238,8 +249,8 @@ String _friendly(ApiException e) {
 // ---------------------------------------------------------------------------
 class StudentState extends ChangeNotifier {
   StudentState({required StudentRepository repository, String? email})
-      : _repo = repository,
-        _email = email;
+    : _repo = repository,
+      _email = email;
 
   final StudentRepository _repo;
   final String? _email;
@@ -250,7 +261,11 @@ class StudentState extends ChangeNotifier {
   bool _mustRefreshFirst = false;
 
   StudentProfile? profile;
+  LoadState profileLoad = LoadState.loading;
   String? profileError;
+  bool _loadingProfile = false;
+  bool get hasVerifiedProfile =>
+      profileLoad == LoadState.ready && profile != null;
 
   LoadState dashboardLoad = LoadState.loading;
   String? dashboardError;
@@ -286,18 +301,29 @@ class StudentState extends ChangeNotifier {
 
   // ---- Profile: GET /student/profile ----
   Future<void> loadProfile() async {
+    if (_loadingProfile) return;
+    _loadingProfile = true;
+    profileLoad = LoadState.loading;
+    profile = null;
+    profileError = null;
+    notifyListeners();
     try {
       final p = await _repo.fetchProfile();
-      profile = StudentProfile(name: p.studentName, sapId: p.sapId, email: _email);
-      profileError = null;
+      if (_disposed) return;
+      profile = StudentProfile.fromDto(p, email: _email);
+      profileLoad = LoadState.ready;
     } on ApiException catch (e) {
+      profileLoad = LoadState.error;
       profileError = e.isNotFound
           ? 'Your student profile was not found. Contact the administration.'
           : _friendly(e);
     } catch (_) {
-      profileError = 'Could not load your profile.';
+      profileLoad = LoadState.error;
+      profileError = 'Could not load your profile. Please try again.';
+    } finally {
+      _loadingProfile = false;
+      notifyListeners();
     }
-    notifyListeners();
   }
 
   // ---- Dashboard: GET /student/dashboard ----
@@ -309,15 +335,12 @@ class StudentState extends ChangeNotifier {
     }
     try {
       final dto = await _repo.fetchDashboard();
-      final p = dto.profile;
-      if (p != null) {
-        profile =
-            StudentProfile(name: p.studentName, sapId: p.sapId, email: _email);
-      }
+      // Only /student/profile updates verified form data. Dashboard loads are independent.
       final active = dto.activeRequest;
       hasActiveRequest = active != null;
-      currentRequest =
-      active == null ? null : _toStatus(active, dto.departments);
+      currentRequest = active == null
+          ? null
+          : _toStatus(active, dto.departments);
       closedRequestCount = dto.closedRequestCount;
       final closed = dto.latestClosedRequest;
       latestClosed = closed == null ? null : _toHistory(closed);
@@ -381,8 +404,20 @@ class StudentState extends ChangeNotifier {
   }
 
   // ---- Submit: POST /student/requests ----
-  Future<SubmitOutcome> submitRequest() async {
+  Future<SubmitOutcome> submitRequest({StudentProfile? reviewedProfile}) async {
     if (isSubmitting) return SubmitOutcome.failed; // no duplicate taps
+    final p = profile;
+    if (!hasVerifiedProfile || p == null) {
+      submitError = 'Load your verified student profile before submitting.';
+      notifyListeners();
+      return SubmitOutcome.failed;
+    }
+    if (reviewedProfile != null && !identical(reviewedProfile, p)) {
+      submitError =
+          'Your student details have changed. Return to the request form and review again.';
+      notifyListeners();
+      return SubmitOutcome.failed;
+    }
     final reason = draft.reason;
     if (reason == null) {
       submitError = 'Please select a clearance reason.';
@@ -398,7 +433,8 @@ class StudentState extends ChangeNotifier {
         // The last submit may or may not have reached the server.
         await refreshDashboard();
         if (dashboardLoad == LoadState.error) {
-          submitError = 'We could not confirm your earlier submission. '
+          submitError =
+              'We could not confirm your earlier submission. '
               'Please check your connection and try again.';
           return SubmitOutcome.failed;
         }
@@ -410,10 +446,10 @@ class StudentState extends ChangeNotifier {
       }
 
       final created = await _repo.createRequest(
-        registrationNumber: draft.registrationNumber,
-        fatherName: draft.fatherName,
-        program: draft.program,
-        semester: draft.semester,
+        registrationNumber: p.registrationNumber,
+        fatherName: p.fatherName,
+        program: p.program,
+        semester: p.semester,
         reason: reason.apiValue,
       );
 
@@ -430,6 +466,14 @@ class StudentState extends ChangeNotifier {
       dashboardError = null;
       return SubmitOutcome.success;
     } on ApiException catch (e) {
+      if (e.code == 'PROFILE_MISMATCH') {
+        profile = null;
+        profileLoad = LoadState.error;
+        profileError =
+            'Your student details have changed. Reload your profile and review the request again.';
+        submitError = profileError;
+        return SubmitOutcome.failed;
+      }
       if (e.isActiveRequestExists) {
         await refreshDashboard();
         submitError = 'You already have an active clearance request.';
@@ -438,7 +482,8 @@ class StudentState extends ChangeNotifier {
       if (e.isNetworkError) {
         // Timeout or unreadable reply: the request may have been created.
         _mustRefreshFirst = true;
-        submitError = '${e.message} Your request may not have been sent. '
+        submitError =
+            '${e.message} Your request may not have been sent. '
             'We will check before you try again.';
         return SubmitOutcome.failed;
       }

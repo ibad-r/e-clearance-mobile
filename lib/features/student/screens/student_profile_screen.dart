@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../core/app_state.dart';
 import '../../../core/routes.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/theme/theme_controller.dart';
+import '../widgets/student_profile_notice.dart';
 import '../state/student_state.dart';
 
 class StudentProfileScreen extends StatelessWidget {
@@ -23,24 +23,18 @@ class StudentProfileScreen extends StatelessWidget {
   Future<void> _goToRoleSelection(BuildContext context) async {
     final nav = Navigator.of(context);
     await context.read<AppState>().logout();
-    nav.pushNamedAndRemoveUntil(
-      AppRoutes.roleSelection,
-          (route) => false,
-    );
+    nav.pushNamedAndRemoveUntil(AppRoutes.roleSelection, (route) => false);
   }
 
   void _changePassword(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Change Password is not available yet.'),
-      ),
+      const SnackBar(content: Text('Change Password is not available yet.')),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final state = context.watch<StudentState>();
-    final theme = context.watch<ThemeController>();
     final cs = Theme.of(context).colorScheme;
     final p = state.profile;
 
@@ -100,44 +94,26 @@ class StudentProfileScreen extends StatelessWidget {
                               ? 'Profile details not available yet'
                               : 'Student',
                           style: TextStyle(
-                              fontSize: 12, color: cs.onSurfaceVariant),
+                            fontSize: 12,
+                            color: cs.onSurfaceVariant,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 20),
+                  const StudentProfileNotice(),
                   _Card(
                     children: [
                       _InfoRow('SAP ID', p?.sapId ?? _missing),
-                      _InfoRow('Registration No.',
-                          p?.registrationNumber ?? _missing),
+                      _InfoRow(
+                        'Registration No.',
+                        p?.registrationNumber ?? _missing,
+                      ),
                       _InfoRow('Email', p?.email ?? _missing),
-                      _InfoRow('Program', p?.program ?? _missing, last: true),
-                    ],
-                  ),
-                  const SizedBox(height: 22),
-                  const _SectionTitle('Appearance'),
-                  _Card(
-                    padding: const EdgeInsets.all(6),
-                    children: [
-                      _AppearanceOption(
-                        icon: Icons.light_mode_outlined,
-                        label: 'Light',
-                        selected: theme.mode == ThemeMode.light,
-                        onTap: () => theme.setMode(ThemeMode.light),
-                      ),
-                      _AppearanceOption(
-                        icon: Icons.dark_mode_outlined,
-                        label: 'Dark',
-                        selected: theme.mode == ThemeMode.dark,
-                        onTap: () => theme.setMode(ThemeMode.dark),
-                      ),
-                      _AppearanceOption(
-                        icon: Icons.desktop_windows_outlined,
-                        label: 'System Default',
-                        selected: theme.mode == ThemeMode.system,
-                        onTap: () => theme.setMode(ThemeMode.system),
-                      ),
+                      _InfoRow("Father's Name", p?.fatherName ?? _missing),
+                      _InfoRow('Program', p?.program ?? _missing),
+                      _InfoRow('Semester', p?.semester ?? _missing, last: true),
                     ],
                   ),
                   const SizedBox(height: 22),
@@ -193,16 +169,14 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _Card extends StatelessWidget {
-  const _Card({required this.children, this.padding = EdgeInsets.zero});
+  const _Card({required this.children});
   final List<Widget> children;
-  final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
-      padding: padding,
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(14),
@@ -234,8 +208,10 @@ class _InfoRow extends StatelessWidget {
         children: [
           Expanded(
             flex: 4,
-            child: Text(label,
-                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
           ),
           Expanded(
             flex: 6,
@@ -250,59 +226,6 @@ class _InfoRow extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _AppearanceOption extends StatelessWidget {
-  const _AppearanceOption({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: selected ? cs.primaryContainer : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 18, color: cs.onSurfaceVariant),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13.5,
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface,
-                ),
-              ),
-            ),
-            Icon(
-              selected
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked,
-              size: 20,
-              color: selected ? AppTheme.primary : cs.onSurfaceVariant,
-            ),
-          ],
-        ),
       ),
     );
   }
