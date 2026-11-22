@@ -4,11 +4,9 @@ import 'auth_user.dart';
 import 'token_storage.dart';
 
 class AuthRepository {
-  AuthRepository({
-    required ApiClient apiClient,
-    TokenStorage? tokenStorage,
-  })  : _api = apiClient,
-        _storage = tokenStorage ?? TokenStorage();
+  AuthRepository({required ApiClient apiClient, TokenStorage? tokenStorage})
+    : _api = apiClient,
+      _storage = tokenStorage ?? TokenStorage();
 
   final ApiClient _api;
   final TokenStorage _storage;
@@ -21,17 +19,33 @@ class AuthRepository {
     required String email,
     required String password,
     String expectedRole = 'EMPLOYEE',
+  }) => _login(
+    body: {'email': email.trim(), 'password': password},
+    expectedRole: expectedRole,
+  );
+
+  /// Confirmed shared contract: one opaque email/SAP identifier and password.
+  Future<AuthUser> studentLogin({
+    required String identifier,
+    required String password,
+  }) => _login(
+    body: {'identifier': identifier.trim(), 'password': password},
+    expectedRole: 'STUDENT',
+  );
+
+  Future<AuthUser> _login({
+    required Map<String, dynamic> body,
+    required String expectedRole,
   }) async {
     final dynamic data;
     try {
-      data = await _api.post(
-        '/auth/login',
-        body: {'email': email.trim(), 'password': password},
-      );
+      data = await _api.post('/auth/login', body: body);
     } on ApiException catch (e) {
       if (e.isUnauthorized) {
         throw ApiException(
-          message: 'Incorrect email or password.',
+          message: expectedRole == 'STUDENT'
+              ? 'Incorrect email, SAP ID, or password.'
+              : 'Incorrect email or password.',
           statusCode: e.statusCode,
           code: e.code,
         );
@@ -45,8 +59,9 @@ class AuthRepository {
       throw ApiException(message: 'Unexpected response from the server.');
     }
 
-    final user =
-    AuthUser.fromJson(Map<String, dynamic>.from(data['user'] as Map));
+    final user = AuthUser.fromJson(
+      Map<String, dynamic>.from(data['user'] as Map),
+    );
     if (user.role != expectedRole) {
       // The token is discarded: nothing is saved for the wrong role.
       throw ApiException(
@@ -76,7 +91,8 @@ class AuthRepository {
         throw ApiException(message: 'Unexpected response from the server.');
       }
       currentUser = AuthUser.fromJson(
-          Map<String, dynamic>.from(data['user'] as Map));
+        Map<String, dynamic>.from(data['user'] as Map),
+      );
       return currentUser;
     } on ApiException catch (e) {
       if (e.isUnauthorized) {

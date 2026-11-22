@@ -31,8 +31,11 @@ int count(List<http.Request> calls, String method, String path) => calls
     .where((r) => r.method == method && r.url.path == '/api/v1$path')
     .length;
 
-ApiClient newClient(Handler handler, List<http.Request> calls,
-    {String? token}) {
+ApiClient newClient(
+  Handler handler,
+  List<http.Request> calls, {
+  String? token,
+}) {
   final api = ApiClient(
     httpClient: MockClient((req) {
       calls.add(req);
@@ -63,40 +66,48 @@ class FakeTokenStorage extends TokenStorage {
 }
 
 // ---------------------------------------------------------------------------
-// Fixtures (fictional data shaped like the proposed contract)
+// Fixtures (fictional data shaped like the confirmed contract)
 // ---------------------------------------------------------------------------
 const _uuid = '11111111-1111-1111-1111-111111111111';
 
-Map<String, dynamic> dept(String code, String name, String status,
-    {String applicability = 'REQUIRED'}) =>
-    {
-      'departmentCode': code,
-      'displayName': name,
-      'applicability': applicability,
-      'status': status,
-      'remarks': null,
-      'updatedAt': null,
-    };
+Map<String, dynamic> dept(
+  String code,
+  String name,
+  String status, {
+  String applicability = 'REQUIRED',
+}) => {
+  'departmentCode': code,
+  'displayName': name,
+  'applicability': applicability,
+  'status': status,
+  'remarks': null,
+  'updatedAt': null,
+};
 
 List<Map<String, dynamic>> fiveDepartments({String library = 'PENDING'}) => [
   dept('LIBRARY', 'Library', library),
   dept('FEE_DUES', 'Fee & Dues Department', 'PENDING'),
   dept('STUDENT_SERVICE', 'Student Service Department', 'PENDING'),
-  dept('LABORATORY', 'Laboratory (if required)', 'PENDING',
-      applicability: 'UNDETERMINED'),
+  dept(
+    'LABORATORY',
+    'Laboratory (if required)',
+    'PENDING',
+    applicability: 'UNDETERMINED',
+  ),
   dept('COORDINATION_OFFICE', 'Coordination Office', 'PENDING'),
 ];
 
-Map<String, dynamic> summaryJson(
-    {bool active = true, String ref = 'ECLR-STU-0001'}) =>
-    {
-      'id': _uuid,
-      'requestReference': ref,
-      'reason': 'degree completed',
-      'isActive': active,
-      'submittedAt': '2026-11-10T08:00:00.000Z',
-      'closedAt': active ? null : '2026-11-12T08:00:00.000Z',
-    };
+Map<String, dynamic> summaryJson({
+  bool active = true,
+  String ref = 'ECLR-STU-0001',
+}) => {
+  'id': _uuid,
+  'requestReference': ref,
+  'reason': 'degree completed',
+  'isActive': active,
+  'submittedAt': '2026-11-10T08:00:00.000Z',
+  'closedAt': active ? null : '2026-11-12T08:00:00.000Z',
+};
 
 Map<String, dynamic> requestJson({String ref = 'ECLR-STU-0001'}) => {
   ...summaryJson(ref: ref),
@@ -109,17 +120,27 @@ Map<String, dynamic> requestJson({String ref = 'ECLR-STU-0001'}) => {
   'departments': fiveDepartments(),
 };
 
-Map<String, dynamic> dashboardJson(
-    {bool active = false, String library = 'PENDING'}) =>
-    {
-      'data': {
-        'profile': {'sapId': '00012345', 'studentName': 'Fictional Student'},
-        'activeRequest': active ? summaryJson() : null,
-        'departments': active ? fiveDepartments(library: library) : [],
-        'progress': null,
-        'history': {'closedRequestCount': 0, 'latestClosedRequest': null},
-      },
-    };
+Map<String, dynamic> profileJson() => {
+  'sapId': '00012345',
+  'studentName': 'Fictional Student',
+  'registrationNumber': 'RIU-2022-CS-0001',
+  'fatherName': 'Fictional Father',
+  'program': 'BSSE',
+  'semester': '8',
+};
+
+Map<String, dynamic> dashboardJson({
+  bool active = false,
+  String library = 'PENDING',
+}) => {
+  'data': {
+    'profile': profileJson(),
+    'activeRequest': active ? summaryJson() : null,
+    'departments': active ? fiveDepartments(library: library) : [],
+    'progress': null,
+    'history': {'closedRequestCount': 0, 'latestClosedRequest': null},
+  },
+};
 
 StudentState newState(Handler handler, List<http.Request> calls) {
   final state = StudentState(
@@ -130,12 +151,12 @@ StudentState newState(Handler handler, List<http.Request> calls) {
   return state;
 }
 
-void fillDraft(StudentState s,
-    {ClearanceReason? reason = ClearanceReason.degreeCompleted}) {
-  s.draft.registrationNumber = ' RIU-2022-CS-0001 ';
-  s.draft.fatherName = 'Fictional Father';
-  s.draft.program = 'BSSE';
-  s.draft.semester = '8';
+void fillDraft(
+  StudentState s, {
+  ClearanceReason? reason = ClearanceReason.degreeCompleted,
+}) {
+  s.profile = StudentProfile.fromDto(StudentProfileDto.fromJson(profileJson()));
+  s.profileLoad = LoadState.ready;
   s.draft.reason = reason;
 }
 
@@ -157,8 +178,10 @@ void main() {
     });
 
     test('unknown department status does not crash', () {
-      final d = DepartmentDto.fromJson(
-          {'departmentCode': 'LIBRARY', 'status': 'SOMETHING_NEW'});
+      final d = DepartmentDto.fromJson({
+        'departmentCode': 'LIBRARY',
+        'status': 'SOMETHING_NEW',
+      });
       expect(d.status, DepartmentApiStatus.unknown);
       expect(d.displayName, 'LIBRARY'); // falls back to the code
     });
@@ -175,66 +198,79 @@ void main() {
 
     test('a request without an id is rejected as unexpected', () {
       expect(
-            () => StudentRequestSummaryDto.fromJson(
-            {'requestReference': 'X', 'reason': 'r', 'isActive': true}),
+        () => StudentRequestSummaryDto.fromJson({
+          'requestReference': 'X',
+          'reason': 'r',
+          'isActive': true,
+        }),
         throwsA(isA<ApiException>()),
       );
     });
 
     test('a non-object profile is rejected as unexpected', () {
-      expect(() => StudentProfileDto.fromJson('nope'),
-          throwsA(isA<ApiException>()));
+      expect(
+        () => StudentProfileDto.fromJson('nope'),
+        throwsA(isA<ApiException>()),
+      );
     });
   });
 
   // -------------------------------------------------------------------------
   group('StudentRepository', () {
-    test('fetchProfile calls GET /student/profile with the Bearer token',
-            () async {
-          final calls = <http.Request>[];
-          final api = newClient((req) async {
-            return jsonResponse({
-              'data': {'sapId': '00012345', 'studentName': 'Fictional Student'}
-            });
-          }, calls, token: 'tok');
+    test(
+      'fetchProfile calls GET /student/profile with the Bearer token',
+      () async {
+        final calls = <http.Request>[];
+        final api = newClient(
+          (req) async {
+            return jsonResponse({'data': profileJson()});
+          },
+          calls,
+          token: 'tok',
+        );
 
-          final p = await StudentRepository(api).fetchProfile();
+        final p = await StudentRepository(api).fetchProfile();
 
-          expect(p.studentName, 'Fictional Student');
-          expect(calls.single.method, 'GET');
-          expect(calls.single.url.path, '/api/v1/student/profile');
-          expect(calls.single.headers['Authorization'], 'Bearer tok');
+        expect(p.studentName, 'Fictional Student');
+        expect(calls.single.method, 'GET');
+        expect(calls.single.url.path, '/api/v1/student/profile');
+        expect(calls.single.headers['Authorization'], 'Bearer tok');
+      },
+    );
+
+    test(
+      'createRequest sends exactly the five approved fields without changing stored whitespace',
+      () async {
+        final calls = <http.Request>[];
+        final api = newClient(
+          (req) async => jsonResponse({'data': requestJson()}, 201),
+          calls,
+          token: 'tok',
+        );
+
+        final created = await StudentRepository(api).createRequest(
+          registrationNumber: ' RIU-1 ',
+          fatherName: 'Father',
+          program: 'BSSE',
+          semester: '8',
+          reason: StudentReasons.degreeCompleted,
+        );
+
+        final body = jsonDecode(calls.single.body) as Map<String, dynamic>;
+        expect(body.keys.toSet(), {
+          'registrationNumber',
+          'fatherName',
+          'program',
+          'semester',
+          'reason',
         });
-
-    test('createRequest sends exactly the five approved fields, trimmed',
-            () async {
-          final calls = <http.Request>[];
-          final api = newClient(
-                  (req) async => jsonResponse({'data': requestJson()}, 201), calls,
-              token: 'tok');
-
-          final created = await StudentRepository(api).createRequest(
-            registrationNumber: ' RIU-1 ',
-            fatherName: 'Father',
-            program: 'BSSE',
-            semester: '8',
-            reason: StudentReasons.degreeCompleted,
-          );
-
-          final body = jsonDecode(calls.single.body) as Map<String, dynamic>;
-          expect(body.keys.toSet(), {
-            'registrationNumber',
-            'fatherName',
-            'program',
-            'semester',
-            'reason',
-          });
-          expect(body['registrationNumber'], 'RIU-1');
-          expect(body['reason'], 'degree completed');
-          expect(body.containsKey('sapId'), isFalse);
-          expect(created.summary.id, _uuid);
-          expect(created.summary.requestReference, 'ECLR-STU-0001');
-        });
+        expect(body['registrationNumber'], ' RIU-1 ');
+        expect(body['reason'], 'degree completed');
+        expect(body.containsKey('sapId'), isFalse);
+        expect(created.summary.id, _uuid);
+        expect(created.summary.requestReference, 'ECLR-STU-0001');
+      },
+    );
 
     test('listRequests accepts an empty list', () async {
       final calls = <http.Request>[];
@@ -245,15 +281,23 @@ void main() {
     test('listRequests rejects a non-list reply as unexpected', () async {
       final calls = <http.Request>[];
       final api = newClient(
-              (req) async => jsonResponse({'data': {'oops': 1}}), calls);
-      await expectLater(StudentRepository(api).listRequests(),
-          throwsA(isA<ApiException>()));
+        (req) async => jsonResponse({
+          'data': {'oops': 1},
+        }),
+        calls,
+      );
+      await expectLater(
+        StudentRepository(api).listRequests(),
+        throwsA(isA<ApiException>()),
+      );
     });
 
     test('fetchRequest encodes the id so it cannot change the path', () async {
       final calls = <http.Request>[];
       final api = newClient(
-              (req) async => jsonResponse({'data': requestJson()}), calls);
+        (req) async => jsonResponse({'data': requestJson()}),
+        calls,
+      );
       await StudentRepository(api).fetchRequest('a/b');
       expect(calls.single.url.path.endsWith('a%2Fb'), isTrue);
     });
@@ -262,12 +306,16 @@ void main() {
       final calls = <http.Request>[];
       var expired = 0;
       final api = newClient(
-              (req) async => errorResponse(401, 'UNAUTHORIZED', 'No'), calls,
-          token: 'tok');
+        (req) async => errorResponse(401, 'UNAUTHORIZED', 'No'),
+        calls,
+        token: 'tok',
+      );
       api.onUnauthorized = () => expired++;
 
-      await expectLater(StudentRepository(api).fetchProfile(),
-          apiError(status: 401, code: 'UNAUTHORIZED'));
+      await expectLater(
+        StudentRepository(api).fetchProfile(),
+        apiError(status: 401, code: 'UNAUTHORIZED'),
+      );
       expect(expired, 1);
     });
 
@@ -279,11 +327,14 @@ void main() {
         [500, 'INTERNAL_SERVER_ERROR'],
       ]) {
         final api = newClient(
-                (req) async => errorResponse(c[0] as int, c[1] as String, 'x'),
-            <http.Request>[],
-            token: 'tok');
-        await expectLater(StudentRepository(api).fetchProfile(),
-            apiError(status: c[0] as int, code: c[1] as String));
+          (req) async => errorResponse(c[0] as int, c[1] as String, 'x'),
+          <http.Request>[],
+          token: 'tok',
+        );
+        await expectLater(
+          StudentRepository(api).fetchProfile(),
+          apiError(status: c[0] as int, code: c[1] as String),
+        );
       }
     });
 
@@ -293,8 +344,13 @@ void main() {
       }, <http.Request>[]);
       await expectLater(
         StudentRepository(api).fetchDashboard(),
-        throwsA(isA<ApiException>()
-            .having((e) => e.isNetworkError, 'isNetworkError', true)),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.isNetworkError,
+            'isNetworkError',
+            true,
+          ),
+        ),
       );
     });
   });
@@ -314,72 +370,97 @@ void main() {
       },
     };
 
-    test('student login sends email and password only and saves the token',
-            () async {
-          final calls = <http.Request>[];
-          final storage = FakeTokenStorage();
-          final api =
-          newClient((req) async => jsonResponse(loginJson('STUDENT')), calls);
-          final repo = AuthRepository(apiClient: api, tokenStorage: storage);
+    test(
+      'student login sends identifier and password only and saves the token',
+      () async {
+        final calls = <http.Request>[];
+        final storage = FakeTokenStorage();
+        final api = newClient(
+          (req) async => jsonResponse(loginJson('STUDENT')),
+          calls,
+        );
+        final repo = AuthRepository(apiClient: api, tokenStorage: storage);
 
-          final user = await repo.login(
-            email: ' person@university.example ',
-            password: 'secret',
-            expectedRole: 'STUDENT',
-          );
+        final user = await repo.studentLogin(
+          identifier: ' person@university.example ',
+          password: 'secret',
+        );
 
-          final body = jsonDecode(calls.single.body) as Map<String, dynamic>;
-          expect(body.keys.toSet(), {'email', 'password'});
-          expect(body['email'], 'person@university.example');
-          expect(user.role, 'STUDENT');
-          expect(storage.token, 'abc');
-          expect(api.authToken, 'abc');
-        });
+        final body = jsonDecode(calls.single.body) as Map<String, dynamic>;
+        expect(body.keys.toSet(), {'identifier', 'password'});
+        expect(body['identifier'], 'person@university.example');
+        expect(user.role, 'STUDENT');
+        expect(storage.token, 'abc');
+        expect(api.authToken, 'abc');
+      },
+    );
 
-    test('a non-student account on the student path is rejected, nothing saved',
-            () async {
-          final storage = FakeTokenStorage();
-          final api = newClient((req) async => jsonResponse(loginJson('EMPLOYEE')),
-              <http.Request>[]);
-          final repo = AuthRepository(apiClient: api, tokenStorage: storage);
+    test(
+      'a non-student account on the student path is rejected, nothing saved',
+      () async {
+        final storage = FakeTokenStorage();
+        final api = newClient(
+          (req) async => jsonResponse(loginJson('EMPLOYEE')),
+          <http.Request>[],
+        );
+        final repo = AuthRepository(apiClient: api, tokenStorage: storage);
 
-          await expectLater(
-            repo.login(
-                email: 'a@b.co', password: 'x', expectedRole: 'STUDENT'),
-            throwsA(isA<ApiException>()
+        await expectLater(
+          repo.studentLogin(identifier: 'a@b.co', password: 'x'),
+          throwsA(
+            isA<ApiException>()
                 .having((e) => e.isRoleMismatch, 'isRoleMismatch', true)
-                .having((e) => e.statusCode, 'statusCode', 403)),
-          );
-          expect(storage.token, isNull);
-          expect(api.authToken, isNull);
-        });
+                .having((e) => e.statusCode, 'statusCode', 403),
+          ),
+        );
+        expect(storage.token, isNull);
+        expect(api.authToken, isNull);
+      },
+    );
 
-    test('employee login still rejects a student account (no regression)',
-            () async {
-          final storage = FakeTokenStorage();
-          final api = newClient((req) async => jsonResponse(loginJson('STUDENT')),
-              <http.Request>[]);
-          final repo = AuthRepository(apiClient: api, tokenStorage: storage);
+    test(
+      'employee login still rejects a student account (no regression)',
+      () async {
+        final storage = FakeTokenStorage();
+        final api = newClient(
+          (req) async => jsonResponse(loginJson('STUDENT')),
+          <http.Request>[],
+        );
+        final repo = AuthRepository(apiClient: api, tokenStorage: storage);
 
-          await expectLater(
-            repo.login(email: 'a@b.co', password: 'x'),
-            throwsA(isA<ApiException>()
-                .having((e) => e.isRoleMismatch, 'isRoleMismatch', true)),
-          );
-          expect(storage.token, isNull);
-        });
+        await expectLater(
+          repo.login(email: 'a@b.co', password: 'x'),
+          throwsA(
+            isA<ApiException>().having(
+              (e) => e.isRoleMismatch,
+              'isRoleMismatch',
+              true,
+            ),
+          ),
+        );
+        expect(storage.token, isNull);
+      },
+    );
 
     test('a wrong password gives a clear message', () async {
       final api = newClient(
-              (req) async => errorResponse(401, 'UNAUTHORIZED', 'bad'),
-          <http.Request>[]);
-      final repo =
-      AuthRepository(apiClient: api, tokenStorage: FakeTokenStorage());
+        (req) async => errorResponse(401, 'UNAUTHORIZED', 'bad'),
+        <http.Request>[],
+      );
+      final repo = AuthRepository(
+        apiClient: api,
+        tokenStorage: FakeTokenStorage(),
+      );
 
       await expectLater(
-        repo.login(email: 'a@b.co', password: 'x', expectedRole: 'STUDENT'),
-        throwsA(isA<ApiException>().having(
-                (e) => e.message, 'message', 'Incorrect email or password.')),
+        repo.studentLogin(identifier: 'a@b.co', password: 'x'),
+        throwsA(
+          isA<ApiException>().having(
+            (e) => e.message,
+            'message',
+            'Incorrect email, SAP ID, or password.',
+          ),
+        ),
       );
     });
   });
@@ -388,52 +469,61 @@ void main() {
   group('StudentState dashboard', () {
     test('no active request is a successful empty state', () async {
       final state = newState(
-              (req) async => jsonResponse(dashboardJson()), <http.Request>[]);
+        (req) async => jsonResponse(dashboardJson()),
+        <http.Request>[],
+      );
       await state.refreshDashboard();
       expect(state.dashboardLoad, LoadState.ready);
       expect(state.hasActiveRequest, isFalse);
       expect(state.currentRequest, isNull);
     });
 
-    test('active request shows all five departments from the server',
-            () async {
-          final state = newState(
-                  (req) async => jsonResponse(dashboardJson(active: true, library: 'CLEARED')),
-              <http.Request>[]);
-          await state.refreshDashboard();
+    test('active request shows all five departments from the server', () async {
+      final state = newState(
+        (req) async =>
+            jsonResponse(dashboardJson(active: true, library: 'CLEARED')),
+        <http.Request>[],
+      );
+      await state.refreshDashboard();
 
-          expect(state.hasActiveRequest, isTrue);
-          final r = state.currentRequest!;
-          expect(r.referenceNumber, 'ECLR-STU-0001');
-          expect(r.departments, hasLength(5));
-          expect(r.departments.first.status, DepartmentStatus.cleared);
-          expect(r.departments.map((d) => d.name), isNot(contains('Examination')));
-        });
+      expect(state.hasActiveRequest, isTrue);
+      final r = state.currentRequest!;
+      expect(r.referenceNumber, 'ECLR-STU-0001');
+      expect(r.departments, hasLength(5));
+      expect(r.departments.first.status, DepartmentStatus.cleared);
+      expect(r.departments.map((d) => d.name), isNot(contains('Examination')));
+    });
 
-    test('a server error is an error state, never "no active request"',
-            () async {
-          final state = newState(
-                  (req) async => errorResponse(500, 'INTERNAL_SERVER_ERROR', 'boom'),
-              <http.Request>[]);
-          await state.refreshDashboard();
-          expect(state.dashboardLoad, LoadState.error);
-          expect(state.dashboardError, contains('Server error'));
-        });
+    test(
+      'a server error is an error state, never "no active request"',
+      () async {
+        final state = newState(
+          (req) async => errorResponse(500, 'INTERNAL_SERVER_ERROR', 'boom'),
+          <http.Request>[],
+        );
+        await state.refreshDashboard();
+        expect(state.dashboardLoad, LoadState.error);
+        expect(state.dashboardError, contains('Server error'));
+      },
+    );
 
-    test('a network failure is an error state with a retryable message',
-            () async {
-          final state = newState((req) async {
-            throw http.ClientException('offline');
-          }, <http.Request>[]);
-          await state.refreshDashboard();
-          expect(state.dashboardLoad, LoadState.error);
-          expect(state.dashboardError, contains('Cannot reach the server'));
-        });
+    test(
+      'a network failure is an error state with a retryable message',
+      () async {
+        final state = newState((req) async {
+          throw http.ClientException('offline');
+        }, <http.Request>[]);
+        await state.refreshDashboard();
+        expect(state.dashboardLoad, LoadState.error);
+        expect(state.dashboardError, contains('Cannot reach the server'));
+      },
+    );
 
     test('403 shows an access message', () async {
       final state = newState(
-              (req) async => errorResponse(403, 'FORBIDDEN', 'no'),
-          <http.Request>[]);
+        (req) async => errorResponse(403, 'FORBIDDEN', 'no'),
+        <http.Request>[],
+      );
       await state.refreshDashboard();
       expect(state.dashboardLoad, LoadState.error);
       expect(state.dashboardError, contains('do not have access'));
@@ -441,8 +531,9 @@ void main() {
 
     test('a missing profile (404) gives a safe not-found message', () async {
       final state = newState(
-              (req) async => errorResponse(404, 'NOT_FOUND', 'none'),
-          <http.Request>[]);
+        (req) async => errorResponse(404, 'NOT_FOUND', 'none'),
+        <http.Request>[],
+      );
       await state.loadProfile();
       expect(state.profile, isNull);
       expect(state.profileError, contains('not found'));
@@ -450,8 +541,9 @@ void main() {
 
     test('malformed JSON shape is a controlled error, not a crash', () async {
       final state = newState(
-              (req) async => jsonResponse({'data': 'not an object'}),
-          <http.Request>[]);
+        (req) async => jsonResponse({'data': 'not an object'}),
+        <http.Request>[],
+      );
       await state.refreshDashboard();
       expect(state.dashboardLoad, LoadState.error);
       expect(state.dashboardError, isNotNull);
@@ -460,30 +552,35 @@ void main() {
 
   // -------------------------------------------------------------------------
   group('StudentState submit', () {
-    test('success uses the server reference and activates the request',
-            () async {
-          final calls = <http.Request>[];
-          final state = newState(
-                  (req) async => jsonResponse(
-                  {'data': requestJson(ref: 'ECLR-STU-0007')}, 201),
-              calls);
-          fillDraft(state);
+    test(
+      'success uses the server reference and activates the request',
+      () async {
+        final calls = <http.Request>[];
+        final state = newState(
+          (req) async =>
+              jsonResponse({'data': requestJson(ref: 'ECLR-STU-0007')}, 201),
+          calls,
+        );
+        fillDraft(state);
 
-          final outcome = await state.submitRequest();
+        final outcome = await state.submitRequest();
 
-          expect(outcome, SubmitOutcome.success);
-          expect(state.lastSubmission!.referenceNumber, 'ECLR-STU-0007');
-          expect(state.hasActiveRequest, isTrue);
-          expect(state.currentRequest!.requestId, _uuid);
-          final body = jsonDecode(calls.single.body) as Map<String, dynamic>;
-          expect(body['reason'], 'degree completed');
-          expect(body['registrationNumber'], 'RIU-2022-CS-0001');
-        });
+        expect(outcome, SubmitOutcome.success);
+        expect(state.lastSubmission!.referenceNumber, 'ECLR-STU-0007');
+        expect(state.hasActiveRequest, isTrue);
+        expect(state.currentRequest!.requestId, _uuid);
+        final body = jsonDecode(calls.single.body) as Map<String, dynamic>;
+        expect(body['reason'], 'degree completed');
+        expect(body['registrationNumber'], 'RIU-2022-CS-0001');
+      },
+    );
 
     test('nothing is sent when no reason is selected', () async {
       final calls = <http.Request>[];
       final state = newState(
-              (req) async => jsonResponse({'data': requestJson()}, 201), calls);
+        (req) async => jsonResponse({'data': requestJson()}, 201),
+        calls,
+      );
       fillDraft(state, reason: null);
 
       expect(await state.submitRequest(), SubmitOutcome.failed);
@@ -499,50 +596,57 @@ void main() {
       }, calls);
       fillDraft(state);
 
-      final results =
-      await Future.wait([state.submitRequest(), state.submitRequest()]);
+      final results = await Future.wait([
+        state.submitRequest(),
+        state.submitRequest(),
+      ]);
 
       expect(count(calls, 'POST', '/student/requests'), 1);
       expect(results, contains(SubmitOutcome.success));
       expect(results, contains(SubmitOutcome.failed));
     });
 
-    test('409 ACTIVE_REQUEST_EXISTS refreshes and is not reported as success',
-            () async {
-          final calls = <http.Request>[];
-          final state = newState((req) async {
-            if (req.method == 'POST') {
-              return errorResponse(409, 'ACTIVE_REQUEST_EXISTS', 'exists');
-            }
-            return jsonResponse(dashboardJson(active: true));
-          }, calls);
-          fillDraft(state);
+    test(
+      '409 ACTIVE_REQUEST_EXISTS refreshes and is not reported as success',
+      () async {
+        final calls = <http.Request>[];
+        final state = newState((req) async {
+          if (req.method == 'POST') {
+            return errorResponse(409, 'ACTIVE_REQUEST_EXISTS', 'exists');
+          }
+          return jsonResponse(dashboardJson(active: true));
+        }, calls);
+        fillDraft(state);
 
-          final outcome = await state.submitRequest();
+        final outcome = await state.submitRequest();
 
-          expect(outcome, SubmitOutcome.conflict);
-          expect(state.lastSubmission, isNull);
-          expect(state.hasActiveRequest, isTrue);
-          expect(count(calls, 'POST', '/student/requests'), 1);
-          expect(count(calls, 'GET', '/student/dashboard'), 1);
-        });
+        expect(outcome, SubmitOutcome.conflict);
+        expect(state.lastSubmission, isNull);
+        expect(state.hasActiveRequest, isTrue);
+        expect(count(calls, 'POST', '/student/requests'), 1);
+        expect(count(calls, 'GET', '/student/dashboard'), 1);
+      },
+    );
 
     test('422 shows a safe validation message and keeps the draft', () async {
       final state = newState(
-              (req) async => errorResponse(422, 'VALIDATION_ERROR', 'bad'),
-          <http.Request>[]);
+        (req) async => errorResponse(422, 'VALIDATION_ERROR', 'bad'),
+        <http.Request>[],
+      );
       fillDraft(state);
 
       expect(await state.submitRequest(), SubmitOutcome.failed);
       expect(state.submitError, contains('not valid'));
-      expect(state.draft.program, 'BSSE');
+      expect(state.profile?.program, 'BSSE');
+      expect(state.draft.reason, ClearanceReason.degreeCompleted);
     });
 
     test('500 fails without forcing a refresh before the next try', () async {
       final calls = <http.Request>[];
       final state = newState(
-              (req) async => errorResponse(500, 'INTERNAL_SERVER_ERROR', 'boom'),
-          calls);
+        (req) async => errorResponse(500, 'INTERNAL_SERVER_ERROR', 'boom'),
+        calls,
+      );
       fillDraft(state);
 
       await state.submitRequest();
@@ -552,48 +656,52 @@ void main() {
       expect(count(calls, 'GET', '/student/dashboard'), 0);
     });
 
-    test('after a timeout the dashboard is refreshed before another submit',
-            () async {
-          final calls = <http.Request>[];
-          var posts = 0;
-          final state = newState((req) async {
-            if (req.method == 'POST') {
-              posts++;
-              throw http.ClientException('timeout');
-            }
-            // The first request actually reached the server.
-            return jsonResponse(dashboardJson(active: true));
-          }, calls);
-          fillDraft(state);
+    test(
+      'after a timeout the dashboard is refreshed before another submit',
+      () async {
+        final calls = <http.Request>[];
+        var posts = 0;
+        final state = newState((req) async {
+          if (req.method == 'POST') {
+            posts++;
+            throw http.ClientException('timeout');
+          }
+          // The first request actually reached the server.
+          return jsonResponse(dashboardJson(active: true));
+        }, calls);
+        fillDraft(state);
 
-          expect(await state.submitRequest(), SubmitOutcome.failed);
-          expect(state.submitError, contains('may not have been sent'));
+        expect(await state.submitRequest(), SubmitOutcome.failed);
+        expect(state.submitError, contains('may not have been sent'));
 
-          final second = await state.submitRequest();
+        final second = await state.submitRequest();
 
-          expect(second, SubmitOutcome.conflict);
-          expect(posts, 1); // no duplicate POST
-          expect(count(calls, 'GET', '/student/dashboard'), 1);
-        });
+        expect(second, SubmitOutcome.conflict);
+        expect(posts, 1); // no duplicate POST
+        expect(count(calls, 'GET', '/student/dashboard'), 1);
+      },
+    );
 
-    test('after a timeout with no request on the server, submit proceeds',
-            () async {
-          final calls = <http.Request>[];
-          var posts = 0;
-          final state = newState((req) async {
-            if (req.method == 'POST') {
-              posts++;
-              if (posts == 1) throw http.ClientException('timeout');
-              return jsonResponse({'data': requestJson()}, 201);
-            }
-            return jsonResponse(dashboardJson()); // nothing was created
-          }, calls);
-          fillDraft(state);
+    test(
+      'after a timeout with no request on the server, submit proceeds',
+      () async {
+        final calls = <http.Request>[];
+        var posts = 0;
+        final state = newState((req) async {
+          if (req.method == 'POST') {
+            posts++;
+            if (posts == 1) throw http.ClientException('timeout');
+            return jsonResponse({'data': requestJson()}, 201);
+          }
+          return jsonResponse(dashboardJson()); // nothing was created
+        }, calls);
+        fillDraft(state);
 
-          expect(await state.submitRequest(), SubmitOutcome.failed);
-          expect(await state.submitRequest(), SubmitOutcome.success);
-          expect(posts, 2);
-          expect(count(calls, 'GET', '/student/dashboard'), 1);
-        });
+        expect(await state.submitRequest(), SubmitOutcome.failed);
+        expect(await state.submitRequest(), SubmitOutcome.success);
+        expect(posts, 2);
+        expect(count(calls, 'GET', '/student/dashboard'), 1);
+      },
+    );
   });
 }

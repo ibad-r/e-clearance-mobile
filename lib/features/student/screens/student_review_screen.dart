@@ -19,6 +19,7 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
 
   // Snapshot of the values being reviewed. They cannot change while this
   // screen is open, and the form is cleared after a successful submit.
+  late final StudentProfile? _reviewedProfile;
   late final String _name;
   late final String _sapId;
   late final String _registration;
@@ -32,12 +33,14 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
     super.initState();
     final state = context.read<StudentState>();
     final d = state.draft;
+    final p = state.profile;
+    _reviewedProfile = p;
     _name = state.profile?.name ?? _missing;
     _sapId = state.profile?.sapId ?? _missing;
-    _registration = d.registrationNumber;
-    _father = d.fatherName;
-    _program = d.program;
-    _semester = d.semester;
+    _registration = p?.registrationNumber ?? _missing;
+    _father = p?.fatherName ?? _missing;
+    _program = p?.program ?? _missing;
+    _semester = p?.semester ?? _missing;
     _reason = d.reason;
     state.submitError = null;
   }
@@ -48,7 +51,9 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
     final nav = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
 
-    final outcome = await state.submitRequest();
+    final outcome = await state.submitRequest(
+      reviewedProfile: _reviewedProfile,
+    );
     if (!mounted) return;
 
     switch (outcome) {
@@ -65,8 +70,10 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
       case SubmitOutcome.conflict:
         messenger.showSnackBar(
           SnackBar(
-            content: Text(state.submitError ??
-                'You already have an active clearance request.'),
+            content: Text(
+              state.submitError ??
+                  'You already have an active clearance request.',
+            ),
           ),
         );
         nav.pop();
@@ -128,8 +135,10 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
                     const SizedBox(height: 8),
                     Text(
                       'Step 2 of 2 · Please confirm your details.',
-                      style:
-                      TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                      ),
                     ),
                     const SizedBox(height: 18),
                     const _SectionTitle('STUDENT DETAILS'),
@@ -155,7 +164,9 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 14),
+                        horizontal: 14,
+                        vertical: 14,
+                      ),
                       decoration: BoxDecoration(
                         color: cs.surface,
                         borderRadius: BorderRadius.circular(14),
@@ -202,15 +213,19 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.error_outline,
-                                size: 18, color: cs.error),
+                            Icon(
+                              Icons.error_outline,
+                              size: 18,
+                              color: cs.error,
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 error,
                                 style: TextStyle(
-                                    fontSize: 12.5,
-                                    color: cs.onErrorContainer),
+                                  fontSize: 12.5,
+                                  color: cs.onErrorContainer,
+                                ),
                               ),
                             ),
                           ],
@@ -228,16 +243,21 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.info_outline,
-                              size: 16, color: cs.onPrimaryContainer),
+                          Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: cs.onPrimaryContainer,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               "After you submit, each department's status "
-                                  'will appear on the Clearance Status screen. '
-                                  'Processing rules are confirmed separately.',
+                              'will appear on the Clearance Status screen. '
+                              'Processing rules are confirmed separately.',
                               style: TextStyle(
-                                  fontSize: 12, color: cs.onPrimaryContainer),
+                                fontSize: 12,
+                                color: cs.onPrimaryContainer,
+                              ),
                             ),
                           ),
                         ],
@@ -266,27 +286,35 @@ class _StudentReviewScreenState extends State<StudentReviewScreen> {
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       child: submitting
                           ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                          : const Text('Confirm and Submit',
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w700)),
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              'Confirm and Submit',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                     ),
                   ),
                   TextButton(
-                    onPressed:
-                    submitting ? null : () => Navigator.pop(context),
+                    onPressed: submitting ? null : () => Navigator.pop(context),
                     child: const Text(
                       'Edit Information',
                       style: TextStyle(
-                          fontSize: 12.5, fontWeight: FontWeight.w600),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],

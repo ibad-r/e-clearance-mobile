@@ -70,14 +70,13 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Student sign-in. Email and password only. If the account is not a
+  /// Student sign-in with the confirmed email/SAP identifier and password. If the account is not a
   /// STUDENT, AuthRepository throws a ROLE_MISMATCH error and saves nothing.
-  Future<void> studentLogin(String email, String password) async {
+  Future<void> studentLogin(String identifier, String password) async {
     _clearLocalData();
-    final user = await _auth.login(
-      email: email,
+    final user = await _auth.studentLogin(
+      identifier: identifier,
       password: password,
-      expectedRole: 'STUDENT',
     );
     studentUser = user;
     sessionExpired = false;

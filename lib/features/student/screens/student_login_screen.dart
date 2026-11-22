@@ -14,26 +14,23 @@ class StudentLoginScreen extends StatefulWidget {
 
 class _StudentLoginScreenState extends State<StudentLoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
+  final _identifierCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
 
   bool _obscure = true;
   bool _loading = false;
   String? _error;
 
-  static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-
   @override
   void dispose() {
-    _emailCtrl.dispose();
+    _identifierCtrl.dispose();
     _passwordCtrl.dispose();
     super.dispose();
   }
 
-  String? _validateEmail(String? value) {
+  String? _validateIdentifier(String? value) {
     final v = value?.trim() ?? '';
-    if (v.isEmpty) return 'Enter your university email';
-    if (!_emailRegex.hasMatch(v)) return 'Enter a valid email address';
+    if (v.isEmpty) return 'Enter your email or SAP ID';
     return null;
   }
 
@@ -51,12 +48,12 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
     setState(() => _loading = true);
     final app = context.read<AppState>();
     try {
-      await app.studentLogin(_emailCtrl.text, _passwordCtrl.text);
+      await app.studentLogin(_identifierCtrl.text, _passwordCtrl.text);
       if (!mounted) return;
       Navigator.pushNamedAndRemoveUntil(
         context,
         AppRoutes.studentHome,
-            (route) => false,
+        (route) => false,
       );
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -90,7 +87,7 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
     Navigator.pushNamedAndRemoveUntil(
       context,
       AppRoutes.roleSelection,
-          (route) => false,
+      (route) => false,
     );
   }
 
@@ -116,8 +113,11 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
                     color: AppTheme.primary,
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Icon(Icons.verified_user_outlined,
-                      color: Colors.white, size: 28),
+                  child: const Icon(
+                    Icons.verified_user_outlined,
+                    color: Colors.white,
+                    size: 28,
+                  ),
                 ),
                 const SizedBox(height: 28),
                 const Text(
@@ -141,7 +141,7 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
                 const SizedBox(height: 8),
                 Text(
                   'Riphah International University. Sign in with your '
-                      'university email to manage your clearance.',
+                  'email or SAP ID and password to manage your clearance.',
                   style: TextStyle(
                     fontSize: 13,
                     height: 1.4,
@@ -149,16 +149,16 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                const _FieldLabel('University Email'),
+                const _FieldLabel('Email or SAP ID'),
                 TextFormField(
-                  controller: _emailCtrl,
-                  keyboardType: TextInputType.emailAddress,
+                  controller: _identifierCtrl,
+                  keyboardType: TextInputType.text,
                   textInputAction: TextInputAction.next,
                   autocorrect: false,
                   enabled: !_loading,
-                  validator: _validateEmail,
+                  validator: _validateIdentifier,
                   decoration: const InputDecoration(
-                    hintText: 'Email',
+                    hintText: 'Enter your email or SAP ID',
                     prefixIcon: Icon(Icons.mail_outline, size: 20),
                   ),
                 ),
@@ -193,7 +193,9 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
                     child: const Text(
                       'Forgot password?',
                       style: TextStyle(
-                          fontSize: 12.5, fontWeight: FontWeight.w600),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
@@ -216,7 +218,9 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
                           child: Text(
                             _error!,
                             style: TextStyle(
-                                fontSize: 12.5, color: cs.onErrorContainer),
+                              fontSize: 12.5,
+                              color: cs.onErrorContainer,
+                            ),
                           ),
                         ),
                       ],
@@ -238,18 +242,20 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
                     ),
                     child: _loading
                         ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: Colors.white,
-                      ),
-                    )
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
                         : const Text(
-                      'Log in',
-                      style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.w700),
-                    ),
+                            'Log in',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -259,7 +265,9 @@ class _StudentLoginScreenState extends State<StudentLoginScreen> {
                     child: const Text(
                       'Not a student? Choose access type',
                       style: TextStyle(
-                          fontSize: 12.5, fontWeight: FontWeight.w600),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),

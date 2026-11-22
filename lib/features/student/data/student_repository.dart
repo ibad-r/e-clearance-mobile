@@ -19,7 +19,7 @@ class StudentRepository {
     return StudentDashboardDto.fromJson(data);
   }
 
-  /// Sends exactly the five approved fields. Never sends SAP ID, name,
+  /// Preserves verified profile values exactly and sends the five approved fields. Never sends SAP ID, name,
   /// user id, role, reference or any status: the backend derives them.
   Future<StudentRequestDto> createRequest({
     required String registrationNumber,
@@ -31,10 +31,10 @@ class StudentRepository {
     final data = await _api.post(
       '/student/requests',
       body: {
-        'registrationNumber': registrationNumber.trim(),
-        'fatherName': fatherName.trim(),
-        'program': program.trim(),
-        'semester': semester.trim(),
+        'registrationNumber': registrationNumber,
+        'fatherName': fatherName,
+        'program': program,
+        'semester': semester,
         'reason': reason,
       },
     );

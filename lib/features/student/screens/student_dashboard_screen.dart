@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../state/student_state.dart';
 import '../widgets/student_widgets.dart';
+import '../widgets/student_profile_notice.dart';
 
 class StudentDashboardScreen extends StatelessWidget {
   const StudentDashboardScreen({
@@ -32,6 +33,7 @@ class StudentDashboardScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _Header(profile: state.profile),
+              const StudentProfileNotice(),
               const SizedBox(height: 20),
               _RequestSection(state: state),
               const SizedBox(height: 14),
@@ -48,9 +50,12 @@ class StudentDashboardScreen extends StatelessWidget {
                       foregroundColor: Colors.white,
                       elevation: 0,
                       textStyle: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w700),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
@@ -69,9 +74,12 @@ class StudentDashboardScreen extends StatelessWidget {
                       foregroundColor: cs.onSurface,
                       side: BorderSide(color: cs.outlineVariant),
                       textStyle: const TextStyle(
-                          fontSize: 14, fontWeight: FontWeight.w600),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
@@ -92,7 +100,9 @@ class StudentDashboardScreen extends StatelessWidget {
                     child: const Text(
                       'View all',
                       style: TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.w600),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -131,7 +141,9 @@ class _Header extends StatelessWidget {
           child: Text(
             p == null ? '?' : _initials(p.name),
             style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w700),
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
         const SizedBox(width: 12),
@@ -139,8 +151,10 @@ class _Header extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Welcome,',
-                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              Text(
+                'Welcome,',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+              ),
               Text(
                 p?.name ?? 'Student',
                 style: TextStyle(
@@ -196,7 +210,8 @@ class _RequestSection extends StatelessWidget {
       case LoadState.error:
         return CardBox(
           child: ErrorRetry(
-            message: state.dashboardError ??
+            message:
+                state.dashboardError ??
                 'Could not load your dashboard. Please try again.',
             onRetry: () => state.refreshDashboard(),
           ),
@@ -230,23 +245,33 @@ class _EmptyRequestCard extends StatelessWidget {
                   color: cs.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Icon(Icons.hourglass_empty,
-                    size: 20, color: cs.onSurfaceVariant),
+                child: Icon(
+                  Icons.hourglass_empty,
+                  size: 20,
+                  color: cs.onSurfaceVariant,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('No active request',
-                        style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: cs.onSurface)),
+                    Text(
+                      'No active request',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: cs.onSurface,
+                      ),
+                    ),
                     const SizedBox(height: 2),
-                    Text('You have not submitted a clearance request.',
-                        style: TextStyle(
-                            fontSize: 12, color: cs.onSurfaceVariant)),
+                    Text(
+                      'You have not submitted a clearance request.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -283,15 +308,18 @@ class _ActiveRequestCard extends StatelessWidget {
                     Text(
                       r.referenceNumber,
                       style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: cs.onSurface),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: cs.onSurface,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Submitted: ${r.submittedOn}',
-                      style:
-                      TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -300,16 +328,21 @@ class _ActiveRequestCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          Text('Department progress',
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: cs.onSurface)),
+          Text(
+            'Department progress',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: cs.onSurface,
+            ),
+          ),
           const SizedBox(height: 8),
           // Exactly what the server returned. No percentage, no locking.
           if (r.departments.isEmpty)
-            Text('Department statuses are not available yet.',
-                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant))
+            Text(
+              'Department statuses are not available yet.',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            )
           else
             for (final d in r.departments) _DepartmentRow(item: d),
         ],
@@ -342,16 +375,20 @@ class _DepartmentRow extends StatelessWidget {
             child: Text(
               item.name,
               style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+              ),
             ),
           ),
-          Text(style.label,
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: style.color)),
+          Text(
+            style.label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: style.color,
+            ),
+          ),
         ],
       ),
     );
@@ -382,17 +419,24 @@ class _HistoryPreview extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(latest.referenceNumber,
-                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+              Text(
+                latest.referenceNumber,
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              ),
               const SizedBox(height: 2),
-              Text(latest.type,
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: cs.onSurface)),
+              Text(
+                latest.type,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                ),
+              ),
               const SizedBox(height: 2),
-              Text('${latest.dateLabel} · ${latest.statusLabel}',
-                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
+              Text(
+                '${latest.dateLabel} · ${latest.statusLabel}',
+                style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              ),
             ],
           ),
         ),

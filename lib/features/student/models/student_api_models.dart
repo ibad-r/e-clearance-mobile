@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../../../core/network/api_exception.dart';
 
-/// Proposed reason literals from the Student contract (confirm with Ibad).
+/// Confirmed reason literals from the Student API contract.
 class StudentReasons {
   static const degreeCompleted = 'degree completed';
   static const discontinuingStudies = 'discontinuing studies';
@@ -17,7 +17,7 @@ Map<String, dynamic> _asMap(dynamic v) {
 
 String _reqStr(Map<String, dynamic> m, String key) {
   final v = m[key];
-  if (v is String && v.isNotEmpty) return v;
+  if (v is String && v.trim().isNotEmpty) return v;
   throw _unexpected();
 }
 
@@ -110,16 +110,31 @@ List<DepartmentDto> _departments(dynamic v) {
 // Profile
 // ---------------------------------------------------------------------------
 class StudentProfileDto {
-  const StudentProfileDto({required this.sapId, required this.studentName});
+  const StudentProfileDto({
+    required this.sapId,
+    required this.studentName,
+    required this.registrationNumber,
+    required this.fatherName,
+    required this.program,
+    required this.semester,
+  });
 
   final String sapId;
   final String studentName;
+  final String registrationNumber;
+  final String fatherName;
+  final String program;
+  final String semester;
 
   factory StudentProfileDto.fromJson(dynamic json) {
     final m = _asMap(json);
     return StudentProfileDto(
       sapId: _reqStr(m, 'sapId'),
       studentName: _reqStr(m, 'studentName'),
+      registrationNumber: _reqStr(m, 'registrationNumber'),
+      fatherName: _reqStr(m, 'fatherName'),
+      program: _reqStr(m, 'program'),
+      semester: _reqStr(m, 'semester'),
     );
   }
 }
@@ -238,11 +253,11 @@ class StudentDashboardDto {
 
     return StudentDashboardDto(
       profile: profile == null ? null : StudentProfileDto.fromJson(profile),
-      activeRequest:
-      active == null ? null : StudentRequestSummaryDto.fromJson(active),
+      activeRequest: active == null
+          ? null
+          : StudentRequestSummaryDto.fromJson(active),
       departments: _departments(m['departments']),
-      progress:
-      progress is Map ? Map<String, dynamic>.from(progress) : null,
+      progress: progress is Map ? Map<String, dynamic>.from(progress) : null,
       closedRequestCount: closedCount,
       latestClosedRequest: latest,
     );
