@@ -4,6 +4,7 @@ import '../../../core/app_state.dart';
 import '../../../core/date_format.dart';
 import '../../../core/routes.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/step_progress_bar.dart';
 
 class NewClearanceScreen extends StatefulWidget {
   const NewClearanceScreen({super.key});
@@ -20,7 +21,6 @@ class _NewClearanceScreenState extends State<NewClearanceScreen> {
     'Transfer',
     'Other',
   ];
-
   static const _inputStyle = TextStyle(fontSize: 14, color: AppTheme.textDark);
   static const _hintStyle = TextStyle(fontSize: 14, color: Color(0xFF94A3B8));
 
@@ -68,7 +68,8 @@ class _NewClearanceScreenState extends State<NewClearanceScreen> {
   void _continue() {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
-    Navigator.pushNamed(context, AppRoutes.review);
+    // Next step: Department Applicability questionnaire.
+    Navigator.pushNamed(context, AppRoutes.questionnaire);
   }
 
   // Optional field: empty is fine, but if typed it must look like a phone.
@@ -153,8 +154,10 @@ class _NewClearanceScreenState extends State<NewClearanceScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const StepProgressBar(step: 1),
+              const SizedBox(height: 12),
               const Text(
-                'Step 1 of 2 · Details we already know are pre-filled and '
+                'Step 1 of 3 · Details we already know are pre-filled and '
                     'locked.',
                 style: TextStyle(
                     fontSize: 12.5, height: 1.4, color: AppTheme.textMuted),
