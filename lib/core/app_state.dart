@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import '../models/employee.dart';
 import '../models/clearance_request.dart';
+import '../models/department_questionnaire.dart';
 import '../data/clearance_repository.dart';
+import '../data/mock_questionnaire.dart';
 import '../data/profile_repository.dart';
 import 'auth/auth_repository.dart';
 import 'auth/auth_user.dart';
@@ -52,6 +54,12 @@ class AppState extends ChangeNotifier {
   // Form values live here, so they survive moving between screens.
   final ClearanceDraft draft = ClearanceDraft();
 
+  /// Questionnaire answers (local mock, never sent to the backend yet).
+  final QuestionnaireDraft questionnaire = QuestionnaireDraft();
+
+  /// Mock request that ends at Pending HR Verification (UI only).
+  PendingHrRequest? pendingHrRequest;
+
   bool get hasActiveRequest => activeRequest != null;
 
   Future<void> login(String email, String password) async {
@@ -70,8 +78,9 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Student sign-in with the confirmed email/SAP identifier and password. If the account is not a
-  /// STUDENT, AuthRepository throws a ROLE_MISMATCH error and saves nothing.
+  /// Student sign-in with the confirmed email/SAP identifier and password. If
+  /// the account is not a STUDENT, AuthRepository throws a ROLE_MISMATCH error
+  /// and saves nothing.
   Future<void> studentLogin(String identifier, String password) async {
     _clearLocalData();
     final user = await _auth.studentLogin(
@@ -87,7 +96,6 @@ class AppState extends ChangeNotifier {
   Future<bool> restoreSession() async {
     final user = await _auth.restoreSession();
     if (user == null) return false;
-
     // A saved Student session must not be treated as an Employee session.
     if (user.role == 'STUDENT') {
       studentUser = user;
@@ -95,7 +103,6 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return true;
     }
-
     final profile = await _profile.getProfile();
     employee = Employee.fromProfile(profile, email: user.email);
     sessionExpired = false;
@@ -162,6 +169,31 @@ class AppState extends ChangeNotifier {
     activeRequest = null;
     casesError = null;
     draft.clear();
+    questionnaire.clear();
+    pendingHrRequest = null;
+  }
+
+  /// Mock submit for this sprint. No network call. Ends at Pending HR.
+  Future<void> submitForHrReview() async {
+    if (_submitting) return;
+    _submitting = true;
+    notifyListeners();
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      pendingHrRequest = PendingHrRequest(
+        reference: kMockRequestReference,
+        submittedAt: DateTime.now(),
+        lastWorkingDay: draft.lastWorkingDay ?? DateTime.now(),
+        likelyApplicable: questionnaire.countOf(QuestionAnswer.yes),
+        reportedNotApplicable: questionnaire.countOf(QuestionAnswer.no),
+        needsVerification: questionnaire.countOf(QuestionAnswer.notSure),
+      );
+      questionnaire.clear();
+      draft.clear();
+    } finally {
+      _submitting = false;
+      notifyListeners();
+    }
   }
 
   /// Sends the request to the backend. The case only exists after the
