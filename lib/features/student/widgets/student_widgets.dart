@@ -10,43 +10,80 @@ class StatusStyle {
   final IconData icon;
 
   static StatusStyle of(DepartmentStatus s, ColorScheme cs) => switch (s) {
-    DepartmentStatus.cleared =>
-    const StatusStyle('Cleared', Color(0xFF16A34A), Icons.check_circle),
-    DepartmentStatus.pending =>
-        StatusStyle('Pending', cs.onSurfaceVariant, Icons.schedule),
-    DepartmentStatus.inReview =>
-        StatusStyle('In review', cs.primary, Icons.hourglass_top),
-    DepartmentStatus.actionRequired =>
-        StatusStyle('Action required', cs.error, Icons.error),
+    DepartmentStatus.cleared => const StatusStyle(
+      'Cleared',
+      Color(0xFF16A34A),
+      Icons.check_circle,
+    ),
+    DepartmentStatus.pending => StatusStyle(
+      'Pending',
+      cs.onSurfaceVariant,
+      Icons.schedule,
+    ),
+    DepartmentStatus.inReview => StatusStyle(
+      'In review',
+      cs.primary,
+      Icons.hourglass_top,
+    ),
+    DepartmentStatus.actionRequired => StatusStyle(
+      'Action required',
+      cs.error,
+      Icons.error,
+    ),
     DepartmentStatus.notRequired => StatusStyle(
-        'Not required', cs.onSurfaceVariant, Icons.remove_circle_outline),
+      'Not required',
+      cs.onSurfaceVariant,
+      Icons.remove_circle_outline,
+    ),
+    DepartmentStatus.undetermined => StatusStyle(
+      'Not yet determined',
+      cs.onSurfaceVariant,
+      Icons.pending_outlined,
+    ),
     DepartmentStatus.unknown => StatusStyle(
-        'Status unavailable', cs.onSurfaceVariant, Icons.help_outline),
+      'Status unavailable',
+      cs.onSurfaceVariant,
+      Icons.help_outline,
+    ),
   };
 }
 
 /// The agreed five-form roster. Examination is not a clearance stage.
 class ClearanceArea {
-  const ClearanceArea(this.name, {this.note});
+  const ClearanceArea(this.name, {this.code, this.note});
   final String name;
+
+  /// Backend department code. Used first when matching server results.
+  final String? code;
   final String? note;
 }
 
 const kClearanceAreas = [
-  ClearanceArea('Library'),
-  ClearanceArea('Fee & Dues Department'),
-  ClearanceArea('Student Service Department'),
+  ClearanceArea('Library', code: 'LIBRARY'),
+  ClearanceArea('Fee & Dues Department', code: 'FEE_DUES'),
+  ClearanceArea('Student Service Department', code: 'STUDENT_SERVICE'),
   ClearanceArea(
     'Laboratory',
-    note: 'Applies only if you have laboratory records or items. '
+    code: 'LABORATORY',
+    note:
+    'Applies only if you have laboratory records or items. '
         'Shown as Not Required only after official verification.',
   ),
-  ClearanceArea('Coordination Office'),
+  ClearanceArea('Coordination Office', code: 'COORDINATION_OFFICE'),
 ];
 
+/// Matches by backend code first, then falls back to the display name.
 DepartmentStatusItem? findDepartment(
-    List<DepartmentStatusItem>? items, String name) {
+    List<DepartmentStatusItem>? items,
+    String name, {
+      String? code,
+    }) {
   if (items == null) return null;
+  if (code != null) {
+    for (final d in items) {
+      if (d.code == code) return d;
+    }
+  }
   for (final d in items) {
     if (d.name.startsWith(name)) return d;
   }
@@ -69,7 +106,10 @@ class PillBadge extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-            fontSize: 11.5, fontWeight: FontWeight.w600, color: color),
+          fontSize: 11.5,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
       ),
     );
   }
@@ -94,8 +134,11 @@ class StatusBadge extends StatelessWidget {
 }
 
 class CardBox extends StatelessWidget {
-  const CardBox(
-      {super.key, required this.child, this.padding = const EdgeInsets.all(16)});
+  const CardBox({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+  });
   final Widget child;
   final EdgeInsets padding;
 
@@ -154,8 +197,10 @@ class InfoRow extends StatelessWidget {
         children: [
           Expanded(
             flex: 4,
-            child: Text(label,
-                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+            ),
           ),
           Expanded(
             flex: 6,
@@ -221,8 +266,10 @@ class ErrorRetry extends StatelessWidget {
             Icon(Icons.error_outline, color: cs.error),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(message,
-                  style: TextStyle(fontSize: 13, color: cs.onSurface)),
+              child: Text(
+                message,
+                style: TextStyle(fontSize: 13, color: cs.onSurface),
+              ),
             ),
           ],
         ),
@@ -232,6 +279,57 @@ class ErrorRetry extends StatelessWidget {
           icon: const Icon(Icons.refresh, size: 18),
           label: const Text('Retry'),
         ),
+      ],
+    );
+  }
+}
+
+/// Saved progress counts from the server. The bar is only drawn when at least
+/// one department is required, so zero never looks like "complete".
+class ProgressSummary extends StatelessWidget {
+  const ProgressSummary({super.key, required this.progress});
+  final StudentProgress progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final p = progress;
+    final lines = <String>[
+      if (p.actionRequiredCount > 0)
+        '${p.actionRequiredCount} need action',
+      if (p.undeterminedCount > 0)
+        '${p.undeterminedCount} not yet determined',
+      if (p.notRequiredCount > 0) '${p.notRequiredCount} not required',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${p.clearedRequiredCount} of ${p.requiredCount} '
+              'required departments cleared',
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+            color: cs.onSurface,
+          ),
+        ),
+        if (p.requiredCount > 0) ...[
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: p.clearedRequiredCount / p.requiredCount,
+              minHeight: 6,
+            ),
+          ),
+        ],
+        if (lines.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            lines.join(' · '),
+            style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
+          ),
+        ],
       ],
     );
   }

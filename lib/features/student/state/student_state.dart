@@ -26,6 +26,9 @@ enum DepartmentStatus {
   cleared,
   actionRequired,
   notRequired,
+
+  /// Applicability not decided yet (for example Laboratory).
+  undetermined,
   unknown,
 }
 
@@ -73,12 +76,16 @@ class StudentHistoryItem {
     required this.type,
     required this.dateLabel,
     required this.statusLabel,
+    this.requestId,
   });
 
   final String referenceNumber;
   final String type;
   final String dateLabel;
   final String statusLabel;
+
+  /// Internal UUID, used for the detail request.
+  final String? requestId;
 }
 
 /// The real result returned by the server after a request is submitted.
@@ -87,11 +94,15 @@ class StudentSubmission {
     required this.referenceNumber,
     required this.submittedOn,
     required this.status,
+    this.completed = false,
   });
 
   final String referenceNumber;
   final String submittedOn;
   final String status;
+
+  /// True when the server completed the request automatically at submit.
+  final bool completed;
 }
 
 /// One department's status as reported by the server.
@@ -100,14 +111,22 @@ class DepartmentStatusItem {
     required this.name,
     required this.status,
     this.updateText,
+    this.code,
+    this.reason,
   });
 
   final String name;
   final DepartmentStatus status;
   final String? updateText;
+
+  /// Backend department code, for example LIBRARY.
+  final String? code;
+
+  /// Backend-approved Student-visible reason. Plain text only.
+  final String? reason;
 }
 
-/// The student's current request and department statuses.
+/// The student's request and department statuses.
 class StudentRequestStatus {
   const StudentRequestStatus({
     required this.requestId,
@@ -122,6 +141,31 @@ class StudentRequestStatus {
   final String submittedOn;
   final String overallStatus;
   final List<DepartmentStatusItem> departments;
+}
+
+/// Progress counts from GET /student/dashboard.
+class StudentProgress {
+  const StudentProgress({
+    required this.requiredCount,
+    required this.clearedRequiredCount,
+    required this.actionRequiredCount,
+    required this.notRequiredCount,
+    required this.undeterminedCount,
+  });
+
+  final int requiredCount;
+  final int clearedRequiredCount;
+  final int actionRequiredCount;
+  final int notRequiredCount;
+  final int undeterminedCount;
+
+  factory StudentProgress.fromDto(StudentProgressDto d) => StudentProgress(
+    requiredCount: d.requiredCount,
+    clearedRequiredCount: d.clearedRequiredCount,
+    actionRequiredCount: d.actionRequiredCount,
+    notRequiredCount: d.notRequiredCount,
+    undeterminedCount: d.undeterminedCount,
+  );
 }
 
 /// Full request record from GET /student/requests/{id}.
@@ -183,6 +227,13 @@ String _reasonLabel(String raw) => switch (raw) {
   _ => raw,
 };
 
+String _parentLabel(StudentRequestSummaryDto s) => switch (s.status) {
+  RequestParentStatus.inProgress => 'In progress',
+  RequestParentStatus.completed => 'Completed',
+  RequestParentStatus.cancelled => 'Cancelled',
+  RequestParentStatus.unknown => s.isActive ? 'In progress' : 'Closed',
+};
+
 DepartmentStatus _mapStatus(DepartmentApiStatus s) => switch (s) {
   DepartmentApiStatus.pending => DepartmentStatus.pending,
   DepartmentApiStatus.inReview => DepartmentStatus.inReview,
@@ -192,35 +243,42 @@ DepartmentStatus _mapStatus(DepartmentApiStatus s) => switch (s) {
   DepartmentApiStatus.unknown => DepartmentStatus.unknown,
 };
 
-/// Remarks are not shown until Student visibility is confirmed.
+/// Undetermined is checked first so it is never shown as cleared or exempt.
 DepartmentStatusItem _toDept(DepartmentDto d) => DepartmentStatusItem(
+  code: d.code,
   name: d.displayName,
-  status: _mapStatus(d.status),
+  status: d.isUndetermined
+      ? DepartmentStatus.undetermined
+      : d.isExempt
+      ? DepartmentStatus.notRequired
+      : _mapStatus(d.status),
   updateText: d.updatedAt == null ? null : 'Updated ${_fmtDate(d.updatedAt)}',
+  reason: d.visibleReason,
 );
 
 StudentRequestStatus _toStatus(
-  StudentRequestSummaryDto s,
-  List<DepartmentDto> deps,
-) => StudentRequestStatus(
+    StudentRequestSummaryDto s,
+    List<DepartmentDto> deps,
+    ) => StudentRequestStatus(
   requestId: s.id,
   referenceNumber: s.requestReference,
   submittedOn: _fmtDate(s.submittedAt),
-  overallStatus: s.isActive ? 'Active' : 'Closed',
+  overallStatus: _parentLabel(s),
   departments: deps.map(_toDept).toList(),
 );
 
 StudentHistoryItem _toHistory(StudentRequestSummaryDto s) => StudentHistoryItem(
+  requestId: s.id,
   referenceNumber: s.requestReference,
   type: _reasonLabel(s.reason),
   dateLabel: _fmtDate(s.closedAt ?? s.submittedAt),
-  statusLabel: s.isActive ? 'Active' : 'Closed',
+  statusLabel: _parentLabel(s),
 );
 
 StudentRequestDetail _toDetail(StudentRequestDto d) => StudentRequestDetail(
   referenceNumber: d.summary.requestReference,
   submittedOn: _fmtDate(d.summary.submittedAt),
-  overallStatus: d.summary.isActive ? 'Active' : 'Closed',
+  overallStatus: _parentLabel(d.summary),
   reasonLabel: _reasonLabel(d.summary.reason),
   departments: d.departments.map(_toDept).toList(),
   studentName: d.studentName,
@@ -237,8 +295,16 @@ String _friendly(ApiException e) {
   if (e.isUnauthorized) return 'Your session has expired. Please log in again.';
   if (e.isForbidden) return 'You do not have access to this information.';
   if (e.isNotFound) return 'The requested record was not found.';
+  if (e.isConflict) {
+    return 'This action conflicts with an existing request. '
+        'Please refresh and try again.';
+  }
   if (e.isValidation) {
     return 'Some of the information is not valid. Please check and try again.';
+  }
+  if (e.statusCode == 503) {
+    return 'The clearance service is temporarily unavailable. '
+        'Please try again shortly.';
   }
   if (e.isServerError) return 'Server error. Please try again later.';
   return 'Something went wrong. Please try again.';
@@ -249,8 +315,8 @@ String _friendly(ApiException e) {
 // ---------------------------------------------------------------------------
 class StudentState extends ChangeNotifier {
   StudentState({required StudentRepository repository, String? email})
-    : _repo = repository,
-      _email = email;
+      : _repo = repository,
+        _email = email;
 
   final StudentRepository _repo;
   final String? _email;
@@ -271,8 +337,17 @@ class StudentState extends ChangeNotifier {
   String? dashboardError;
   bool hasActiveRequest = false;
   StudentRequestStatus? currentRequest;
+  StudentProgress? progress;
   int closedRequestCount = 0;
   StudentHistoryItem? latestClosed;
+
+  /// Saved results of the latest closed request (for example one that was
+  /// completed automatically at submit). Null if it could not be loaded.
+  StudentRequestStatus? latestClosedStatus;
+
+  /// The request to show: the active one, or else the latest closed one.
+  StudentRequestStatus? get displayRequest =>
+      currentRequest ?? latestClosedStatus;
 
   LoadState historyLoad = LoadState.loading;
   String? historyError;
@@ -327,7 +402,9 @@ class StudentState extends ChangeNotifier {
   }
 
   // ---- Dashboard: GET /student/dashboard ----
-  Future<void> refreshDashboard() async {
+  /// [quiet] keeps the data already on screen if this refresh fails
+  /// (used when the app returns to the foreground and after a submit).
+  Future<void> refreshDashboard({bool quiet = false}) async {
     if (dashboardLoad != LoadState.ready) {
       dashboardLoad = LoadState.loading;
       dashboardError = null;
@@ -341,20 +418,47 @@ class StudentState extends ChangeNotifier {
       currentRequest = active == null
           ? null
           : _toStatus(active, dto.departments);
+      final p = dto.progress;
+      progress = p == null ? null : StudentProgress.fromDto(p);
       closedRequestCount = dto.closedRequestCount;
       final closed = dto.latestClosedRequest;
       latestClosed = closed == null ? null : _toHistory(closed);
+
+      // A completed request is no longer "active", so the dashboard returns no
+      // departments for it. Load its saved results by UUID.
+      if (active == null && closed != null) {
+        latestClosedStatus = await _loadClosedStatus(closed);
+      } else {
+        latestClosedStatus = null;
+      }
+
       dashboardLoad = LoadState.ready;
       dashboardError = null;
     } on ApiException catch (e) {
       // A failed load is an error, never "no active request".
-      dashboardLoad = LoadState.error;
-      dashboardError = _friendly(e);
+      if (!(quiet && dashboardLoad == LoadState.ready)) {
+        dashboardLoad = LoadState.error;
+        dashboardError = _friendly(e);
+      }
     } catch (_) {
-      dashboardLoad = LoadState.error;
-      dashboardError = 'Unexpected error. Please try again.';
+      if (!(quiet && dashboardLoad == LoadState.ready)) {
+        dashboardLoad = LoadState.error;
+        dashboardError = 'Unexpected error. Please try again.';
+      }
     }
     notifyListeners();
+  }
+
+  Future<StudentRequestStatus?> _loadClosedStatus(
+      StudentRequestSummaryDto closed,
+      ) async {
+    try {
+      final full = await _repo.fetchRequest(closed.id);
+      return _toStatus(full.summary, full.departments);
+    } catch (_) {
+      // The history card is still shown; department results are just missing.
+      return null;
+    }
   }
 
   // ---- History: GET /student/requests ----
@@ -378,7 +482,7 @@ class StudentState extends ChangeNotifier {
 
   // ---- Request details: GET /student/requests/{id} ----
   Future<void> loadDetail() async {
-    final id = currentRequest?.requestId;
+    final id = currentRequest?.requestId ?? latestClosed?.requestId;
     if (id == null) {
       detail = null;
       detailLoad = LoadState.ready;
@@ -414,7 +518,7 @@ class StudentState extends ChangeNotifier {
     }
     if (reviewedProfile != null && !identical(reviewedProfile, p)) {
       submitError =
-          'Your student details have changed. Return to the request form and review again.';
+      'Your student details have changed. Return to the request form and review again.';
       notifyListeners();
       return SubmitOutcome.failed;
     }
@@ -434,7 +538,7 @@ class StudentState extends ChangeNotifier {
         await refreshDashboard();
         if (dashboardLoad == LoadState.error) {
           submitError =
-              'We could not confirm your earlier submission. '
+          'We could not confirm your earlier submission. '
               'Please check your connection and try again.';
           return SubmitOutcome.failed;
         }
@@ -455,13 +559,20 @@ class StudentState extends ChangeNotifier {
 
       // Success only after the server answered 201 with a valid request.
       final s = created.summary;
+      final status = _toStatus(s, created.departments);
       lastSubmission = StudentSubmission(
         referenceNumber: s.requestReference,
         submittedOn: _fmtDate(s.submittedAt),
-        status: s.isActive ? 'Active' : 'Closed',
+        status: status.overallStatus,
+        completed: s.status == RequestParentStatus.completed,
       );
       hasActiveRequest = s.isActive;
-      currentRequest = s.isActive ? _toStatus(s, created.departments) : null;
+      currentRequest = s.isActive ? status : null;
+      // Immediate completion: keep the returned results and ID, because the
+      // request is no longer the dashboard's active request.
+      latestClosedStatus = s.isActive ? null : status;
+      // Progress comes from the dashboard. The confirmation screen reloads it.
+      progress = null;
       dashboardLoad = LoadState.ready;
       dashboardError = null;
       return SubmitOutcome.success;
@@ -470,7 +581,7 @@ class StudentState extends ChangeNotifier {
         profile = null;
         profileLoad = LoadState.error;
         profileError =
-            'Your student details have changed. Reload your profile and review the request again.';
+        'Your student details have changed. Reload your profile and review the request again.';
         submitError = profileError;
         return SubmitOutcome.failed;
       }
@@ -483,7 +594,7 @@ class StudentState extends ChangeNotifier {
         // Timeout or unreadable reply: the request may have been created.
         _mustRefreshFirst = true;
         submitError =
-            '${e.message} Your request may not have been sent. '
+        '${e.message} Your request may not have been sent. '
             'We will check before you try again.';
         return SubmitOutcome.failed;
       }

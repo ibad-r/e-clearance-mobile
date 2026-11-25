@@ -5,7 +5,7 @@ import '../state/student_state.dart';
 import '../widgets/student_widgets.dart';
 import '../widgets/student_profile_notice.dart';
 
-class StudentDashboardScreen extends StatelessWidget {
+class StudentDashboardScreen extends StatefulWidget {
   const StudentDashboardScreen({
     super.key,
     required this.onNewRequest,
@@ -16,6 +16,33 @@ class StudentDashboardScreen extends StatelessWidget {
   final VoidCallback onNewRequest;
   final VoidCallback onViewStatus;
   final VoidCallback onViewHistory;
+
+  @override
+  State<StudentDashboardScreen> createState() => _StudentDashboardScreenState();
+}
+
+class _StudentDashboardScreenState extends State<StudentDashboardScreen>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Reload saved results when the app returns to the foreground.
+  /// This is a normal GET refresh only. It never triggers a check.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    if (lifecycleState == AppLifecycleState.resumed && mounted) {
+      context.read<StudentState>().refreshDashboard(quiet: true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +69,7 @@ class StudentDashboardScreen extends StatelessWidget {
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton.icon(
-                    onPressed: onNewRequest,
+                    onPressed: widget.onNewRequest,
                     icon: const Icon(Icons.note_add_outlined, size: 18),
                     label: const Text('New Clearance Request'),
                     style: ElevatedButton.styleFrom(
@@ -66,7 +93,7 @@ class StudentDashboardScreen extends StatelessWidget {
                   width: double.infinity,
                   height: 48,
                   child: OutlinedButton.icon(
-                    onPressed: onViewStatus,
+                    onPressed: widget.onViewStatus,
                     icon: const Icon(Icons.checklist, size: 18),
                     label: const Text('View Clearance Status'),
                     style: OutlinedButton.styleFrom(
@@ -96,7 +123,7 @@ class StudentDashboardScreen extends StatelessWidget {
                     ),
                   ),
                   TextButton(
-                    onPressed: onViewHistory,
+                    onPressed: widget.onViewHistory,
                     child: const Text(
                       'View all',
                       style: TextStyle(
@@ -178,12 +205,13 @@ class _Header extends StatelessWidget {
 }
 
 class _CardLabel extends StatelessWidget {
-  const _CardLabel();
+  const _CardLabel(this.text);
+  final String text;
 
   @override
   Widget build(BuildContext context) {
     return Text(
-      'CURRENT CLEARANCE REQUEST',
+      text,
       style: TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w600,
@@ -194,7 +222,7 @@ class _CardLabel extends StatelessWidget {
   }
 }
 
-/// Loading / error / active / empty. A failed load is never shown as empty.
+/// Loading / error / request / empty. A failed load is never shown as empty.
 class _RequestSection extends StatelessWidget {
   const _RequestSection({required this.state});
   final StudentState state;
@@ -211,21 +239,32 @@ class _RequestSection extends StatelessWidget {
         return CardBox(
           child: ErrorRetry(
             message:
-                state.dashboardError ??
+            state.dashboardError ??
                 'Could not load your dashboard. Please try again.',
             onRetry: () => state.refreshDashboard(),
           ),
         );
       case LoadState.ready:
-        return state.hasActiveRequest
-            ? _ActiveRequestCard(request: state.currentRequest)
-            : const _EmptyRequestCard();
+        final r = state.displayRequest;
+        if (r == null) {
+          return _EmptyRequestCard(hasClosedRequests: state.closedRequestCount > 0);
+        }
+        final active = state.hasActiveRequest;
+        return _RequestCard(
+          request: r,
+          label: active
+              ? 'CURRENT CLEARANCE REQUEST'
+              : 'LATEST CLEARANCE REQUEST',
+          // Progress is only returned for an active request.
+          progress: active ? state.progress : null,
+        );
     }
   }
 }
 
 class _EmptyRequestCard extends StatelessWidget {
-  const _EmptyRequestCard();
+  const _EmptyRequestCard({required this.hasClosedRequests});
+  final bool hasClosedRequests;
 
   @override
   Widget build(BuildContext context) {
@@ -234,7 +273,7 @@ class _EmptyRequestCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _CardLabel(),
+          const _CardLabel('CURRENT CLEARANCE REQUEST'),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -266,7 +305,9 @@ class _EmptyRequestCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'You have not submitted a clearance request.',
+                      hasClosedRequests
+                          ? 'Your latest request is closed. See your history below.'
+                          : 'You have not submitted a clearance request.',
                       style: TextStyle(
                         fontSize: 12,
                         color: cs.onSurfaceVariant,
@@ -283,21 +324,30 @@ class _EmptyRequestCard extends StatelessWidget {
   }
 }
 
-class _ActiveRequestCard extends StatelessWidget {
-  const _ActiveRequestCard({required this.request});
-  final StudentRequestStatus? request;
+class _RequestCard extends StatelessWidget {
+  const _RequestCard({
+    required this.request,
+    required this.label,
+    required this.progress,
+  });
+
+  final StudentRequestStatus request;
+  final String label;
+  final StudentProgress? progress;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final r = request;
-    if (r == null) return const _EmptyRequestCard();
+    final badgeColor = r.overallStatus == 'Completed'
+        ? const Color(0xFF16A34A)
+        : cs.primary;
 
     return CardBox(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _CardLabel(),
+          _CardLabel(label),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -324,9 +374,13 @@ class _ActiveRequestCard extends StatelessWidget {
                   ],
                 ),
               ),
-              PillBadge(label: r.overallStatus, color: cs.primary),
+              PillBadge(label: r.overallStatus, color: badgeColor),
             ],
           ),
+          if (progress != null) ...[
+            const SizedBox(height: 14),
+            ProgressSummary(progress: progress!),
+          ],
           const SizedBox(height: 16),
           Text(
             'Department progress',
@@ -359,6 +413,7 @@ class _DepartmentRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final style = StatusStyle.of(item.status, cs);
+    final reason = item.reason;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
@@ -368,19 +423,40 @@ class _DepartmentRow extends StatelessWidget {
         border: Border.all(color: cs.outlineVariant),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(style.icon, size: 18, color: style.color),
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(style.icon, size: 18, color: style.color),
+          ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              item.name,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: cs.onSurface,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.name,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface,
+                  ),
+                ),
+                if (reason != null) ...[
+                  const SizedBox(height: 3),
+                  // Plain text only. The reason comes from the backend.
+                  Text(
+                    reason,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
+          const SizedBox(width: 8),
           Text(
             style.label,
             style: TextStyle(
