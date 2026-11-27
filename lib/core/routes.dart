@@ -37,18 +37,23 @@ class AppRoutes {
   static Map<String, WidgetBuilder> get table => {
     roleSelection: (_) => const RoleSelectionScreen(),
     login: (_) => const LoginScreen(),
-    // While a mock request is waiting for HR, show the pending screens.
-    // Otherwise the existing real screens are used, unchanged.
-    dashboard: (ctx) => ctx.read<AppState>().pendingHrRequest != null
-        ? const PendingHrDashboardScreen()
-        : const DashboardScreen(),
+    // While a request is waiting for HR (a real PENDING_HR_VERIFICATION case,
+    // or the local mock), show the pending screens. Consumer re-checks on
+    // every change, so the screen switches by itself once HR confirms.
+    dashboard: (_) => Consumer<AppState>(
+      builder: (_, state, _) => state.pendingHrRequest != null
+          ? const PendingHrDashboardScreen()
+          : const DashboardScreen(),
+    ),
     newClearance: (_) => const NewClearanceScreen(),
     questionnaire: (_) => const QuestionnaireScreen(),
     review: (_) => const ReviewScreen(),
     success: (_) => const SuccessScreen(),
-    progress: (ctx) => ctx.read<AppState>().pendingHrRequest != null
-        ? const PendingHrProgressScreen()
-        : const ProgressScreen(),
+    progress: (_) => Consumer<AppState>(
+      builder: (_, state, _) => state.pendingHrRequest != null
+          ? const PendingHrProgressScreen()
+          : const ProgressScreen(),
+    ),
     studentLogin: (_) => const StudentLoginScreen(),
     studentHome: (_) => const StudentShell(),
     studentAccessDenied: (_) => const StudentAccessDeniedScreen(),
