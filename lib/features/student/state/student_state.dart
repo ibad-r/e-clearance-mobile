@@ -482,7 +482,9 @@ class StudentState extends ChangeNotifier {
 
   // ---- Request details: GET /student/requests/{id} ----
   Future<void> loadDetail() async {
-    final id = currentRequest?.requestId ?? latestClosed?.requestId;
+    // displayRequest also covers a request that completed at submit, before
+    // the dashboard has been reloaded.
+    final id = displayRequest?.requestId ?? latestClosed?.requestId;
     if (id == null) {
       detail = null;
       detailLoad = LoadState.ready;
