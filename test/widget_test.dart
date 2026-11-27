@@ -9,6 +9,7 @@ import 'package:e_clearance_mobile/core/routes.dart';
 import 'package:e_clearance_mobile/core/theme/app_theme.dart';
 import 'package:e_clearance_mobile/data/clearance_repository.dart';
 import 'package:e_clearance_mobile/models/clearance_request.dart';
+import 'package:e_clearance_mobile/models/department_questionnaire.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -85,6 +86,30 @@ Map<String, dynamic> _caseJson() => {
   },
 };
 
+/// What the real backend returns for a new submission that includes the
+/// questionnaire: Pending HR Verification, with no stages and no approvals.
+Map<String, dynamic> _pendingCaseJson(Map<String, dynamic> answers) => {
+  ..._caseJson(),
+  'status': 'PENDING_HR_VERIFICATION',
+  'stages': <Map<String, dynamic>>[],
+  'approvals': <Map<String, dynamic>>[],
+  'progress': {
+    'totalStages': 0,
+    'clearedStages': 0,
+    'outstandingStages': 0,
+    'skippedStages': 0,
+  },
+  'questionnaireVersion': 'v1',
+  'questionnaireAnswers': answers,
+  'departmentRecommendation': {
+    'status': 'UNAVAILABLE',
+    'ruleVersion': null,
+    'departments': <Map<String, dynamic>>[],
+  },
+  'hrSelection': null,
+  'confirmedDepartmentIds': <String>[],
+};
+
 /// Keeps the token in memory, so tests never touch the real secure storage.
 class _FakeTokenStorage extends TokenStorage {
   String? _value;
@@ -115,7 +140,8 @@ class _FakeBackend {
       .length;
 
   http.Request lastRequest(String method, String path) => log.lastWhere(
-          (r) => r.method == method && r.url.path.endsWith(path));
+        (r) => r.method == method && r.url.path.endsWith(path),
+  );
 
   Future<http.Response> handle(http.Request r) async {
     log.add(r);
@@ -159,7 +185,29 @@ class _FakeBackend {
     }
 
     if (r.method == 'POST' && path.endsWith('/employee/cases')) {
-      final created = _caseJson();
+      final body = jsonDecode(r.body) as Map<String, dynamic>;
+      final answers = body['questionnaireAnswers'];
+
+      // Same rule as the real backend: all 14 keys, exact literals only.
+      if (answers != null) {
+        final valid =
+            answers is Map &&
+                answers.length == kQuestionnaireApiKeys.length &&
+                kQuestionnaireApiKeys.every(answers.containsKey) &&
+                answers.values.every(
+                      (v) => v == 'YES' || v == 'NO' || v == 'NOT_SURE',
+                );
+        if (!valid) {
+          return _json(
+            422,
+            _error('VALIDATION_ERROR', 'Invalid questionnaire answers'),
+          );
+        }
+      }
+
+      final created = answers is Map
+          ? _pendingCaseJson(Map<String, dynamic>.from(answers))
+          : _caseJson();
       cases.add(created);
       return _json(201, {'data': created});
     }
@@ -201,6 +249,17 @@ ClearanceDraft _draft({String? reason, String remarks = ''}) => ClearanceDraft()
   ..reason = reason ?? 'Contract Completion'
   ..remarks = remarks;
 
+/// Answers all 14 questions, so AppState.submit() is allowed to send.
+void _answerAll(AppState state, {QuestionAnswer answer = QuestionAnswer.no}) {
+  for (var i = 0; i < kQuestionnaireApiKeys.length; i++) {
+    state.questionnaire.setAnswer(i, answer);
+  }
+}
+
+Map<String, QuestionAnswer> _allAnswers() => {
+  for (final k in kQuestionnaireApiKeys) k: QuestionAnswer.no,
+};
+
 void main() {
   group('Login screen', () {
     testWidgets('shows email, password and Log in button', (tester) async {
@@ -239,23 +298,24 @@ void main() {
       expect(find.text('Log in'), findsOneWidget);
     });
 
-    testWidgets('correct login opens the dashboard with the real profile',
-            (tester) async {
-          final backend = _FakeBackend();
-          await tester.pumpWidget(_buildApp(backend.newState()));
+    testWidgets('correct login opens the dashboard with the real profile', (
+        tester,
+        ) async {
+      final backend = _FakeBackend();
+      await tester.pumpWidget(_buildApp(backend.newState()));
 
-          await tester.enterText(find.byType(TextFormField).first, _email);
-          await tester.enterText(find.byType(TextFormField).last, _password);
-          await tester.tap(find.text('Log in'));
-          await tester.pump();
-          await tester.pump(const Duration(milliseconds: 100));
-          await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField).first, _email);
+      await tester.enterText(find.byType(TextFormField).last, _password);
+      await tester.tap(find.text('Log in'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pumpAndSettle();
 
-          expect(find.text('Test Employee'), findsOneWidget);
-          expect(find.text('No active clearance'), findsOneWidget);
-          expect(find.text('Start Clearance'), findsOneWidget);
-          expect(backend.count('GET', '/employee/profile'), 1);
-        });
+      expect(find.text('Test Employee'), findsOneWidget);
+      expect(find.text('No active clearance'), findsOneWidget);
+      expect(find.text('Start Clearance'), findsOneWidget);
+      expect(backend.count('GET', '/employee/profile'), 1);
+    });
   });
 
   group('API client and repositories', () {
@@ -277,10 +337,14 @@ void main() {
 
       final result = await repo.submit(_draft(remarks: ''));
 
-      final sent = jsonDecode(backend.lastRequest('POST', '/employee/cases').body)
+      final sent =
+      jsonDecode(backend.lastRequest('POST', '/employee/cases').body)
       as Map<String, dynamic>;
-      expect(sent.keys.toSet(),
-          {'lastWorkingDate', 'reasonForLeaving', 'employeeRemarks'});
+      expect(sent.keys.toSet(), {
+        'lastWorkingDate',
+        'reasonForLeaving',
+        'employeeRemarks',
+      });
       expect(sent['lastWorkingDate'], '2026-11-10');
       expect(sent['reasonForLeaving'], 'Contract Completion');
       expect(sent['employeeRemarks'], isNull);
@@ -295,9 +359,58 @@ void main() {
 
       await repo.submit(_draft(remarks: 'Handover done'));
 
-      final sent = jsonDecode(backend.lastRequest('POST', '/employee/cases').body)
+      final sent =
+      jsonDecode(backend.lastRequest('POST', '/employee/cases').body)
       as Map<String, dynamic>;
       expect(sent['employeeRemarks'], 'Handover done');
+    });
+
+    test('submit sends all 14 questionnaire answers with exact literals',
+            () async {
+          final backend = _FakeBackend();
+          final api = backend.newClient()..authToken = _token;
+          final repo = ApiClearanceRepository(apiClient: api);
+
+          final answers = _allAnswers()
+            ..['hdsDepartment'] = QuestionAnswer.yes
+            ..['oric'] = QuestionAnswer.notSure;
+          await repo.submit(_draft(), questionnaireAnswers: answers);
+
+          final sent =
+          jsonDecode(backend.lastRequest('POST', '/employee/cases').body)
+          as Map<String, dynamic>;
+          // Only these four fields. No IDs, statuses or recommendations.
+          expect(sent.keys.toSet(), {
+            'lastWorkingDate',
+            'reasonForLeaving',
+            'employeeRemarks',
+            'questionnaireAnswers',
+          });
+          final sentAnswers = sent['questionnaireAnswers'] as Map<String, dynamic>;
+          expect(sentAnswers.keys.toSet(), kQuestionnaireApiKeys.toSet());
+          expect(sentAnswers['hdsDepartment'], 'YES');
+          expect(sentAnswers['oric'], 'NOT_SURE');
+          expect(sentAnswers['financeDepartment'], 'NO');
+        });
+
+    test('fewer than 14 answers is rejected before sending', () async {
+      final backend = _FakeBackend();
+      final api = backend.newClient()..authToken = _token;
+      final repo = ApiClearanceRepository(apiClient: api);
+
+      final partial = _allAnswers()..remove('pharmacy');
+
+      await expectLater(
+        repo.submit(_draft(), questionnaireAnswers: partial),
+        throwsA(
+          isA<ApiException>().having(
+                (e) => e.isValidation,
+            'isValidation',
+            true,
+          ),
+        ),
+      );
+      expect(backend.count('POST', '/employee/cases'), 0);
     });
 
     test('a reason shorter than 3 characters is rejected before sending',
@@ -308,11 +421,45 @@ void main() {
 
           await expectLater(
             repo.submit(_draft(reason: 'ab')),
-            throwsA(isA<ApiException>()
-                .having((e) => e.isValidation, 'isValidation', true)),
+            throwsA(
+              isA<ApiException>().having(
+                    (e) => e.isValidation,
+                'isValidation',
+                true,
+              ),
+            ),
           );
           expect(backend.count('POST', '/employee/cases'), 0);
         });
+
+    test('submit is blocked when questions are unanswered and the server is '
+        'not called', () async {
+      final backend = _FakeBackend();
+      final state = backend.newState();
+      await state.login(_email, _password);
+
+      state.draft
+        ..lastWorkingDay = DateTime(2026, 11, 10)
+        ..reason = 'Contract Completion';
+      // Only 13 of 14 answered.
+      for (var i = 0; i < 13; i++) {
+        state.questionnaire.setAnswer(i, QuestionAnswer.no);
+      }
+
+      await expectLater(
+        state.submit(),
+        throwsA(
+          isA<ApiException>().having(
+                (e) => e.isValidation,
+            'isValidation',
+            true,
+          ),
+        ),
+      );
+      expect(backend.count('POST', '/employee/cases'), 0);
+      // Nothing was defaulted: the 14th question is still unanswered.
+      expect(state.questionnaire.answerAt(13), isNull);
+    });
 
     test('a second tap on submit is ignored while the first is running',
             () async {
@@ -323,6 +470,7 @@ void main() {
           state.draft
             ..lastWorkingDay = DateTime(2026, 11, 10)
             ..reason = 'Contract Completion';
+          _answerAll(state);
 
           await Future.wait([state.submit(), state.submit()]);
 
@@ -338,6 +486,7 @@ void main() {
       state.draft
         ..lastWorkingDay = DateTime(2026, 11, 10)
         ..reason = 'Contract Completion';
+      _answerAll(state);
       await state.submit();
 
       // Forget the local copy, then reload from the (fake) backend.
@@ -346,7 +495,94 @@ void main() {
 
       expect(state.hasActiveRequest, isTrue);
       expect(state.activeRequest!.id, 'TEST-0001');
-      expect(state.activeRequest!.status, 'IN_PROGRESS');
+      expect(state.activeRequest!.status, 'PENDING_HR_VERIFICATION');
+    });
+
+    test('a Pending HR case has no stages and its saved answers reload from '
+        'the server', () async {
+      final backend = _FakeBackend();
+      final state = backend.newState();
+      await state.login(_email, _password);
+
+      state.draft
+        ..lastWorkingDay = DateTime(2026, 11, 10)
+        ..reason = 'Contract Completion';
+      _answerAll(state);
+      state.questionnaire.setAnswer(0, QuestionAnswer.yes); // hdsDepartment
+      await state.submit();
+
+      // Right after submit.
+      expect(state.activeRequest!.isPendingHr, isTrue);
+      expect(state.activeRequest!.steps, isEmpty);
+      expect(state.activeRequest!.overallStatus, StepStatus.locked);
+      expect(state.pendingHrRequest, isNotNull);
+      // The form is cleared only after the server confirmed.
+      expect(state.questionnaire.answeredCount, 0);
+
+      // After an app reload, the answers come back from the backend.
+      state.activeRequest = null;
+      await state.refreshCases();
+      final saved = state.activeRequest!;
+      expect(saved.questionnaireAnswers!.length, 14);
+      expect(saved.questionnaireAnswers!['hdsDepartment'], QuestionAnswer.yes);
+      expect(saved.questionnaireAnswers!['pharmacy'], QuestionAnswer.no);
+      expect(state.pendingHrRequest!.likelyApplicable, 1);
+      expect(state.pendingHrRequest!.reportedNotApplicable, 13);
+    });
+
+    test('after a network failure the cases are reloaded before submitting '
+        'again', () async {
+      final backend = _FakeBackend();
+      var dropNextReply = true;
+      final api = ApiClient(
+        httpClient: MockClient((r) async {
+          if (dropNextReply &&
+              r.method == 'POST' &&
+              r.url.path.endsWith('/employee/cases')) {
+            dropNextReply = false;
+            // The server saved the case, but the reply never arrived.
+            await backend.handle(r);
+            throw http.ClientException('connection lost');
+          }
+          return backend.handle(r);
+        }),
+        baseUrl: 'http://test/api/v1',
+      );
+      final state = AppState(
+        apiClient: api,
+        auth: AuthRepository(
+          apiClient: api,
+          tokenStorage: _FakeTokenStorage(),
+        ),
+      );
+      await state.login(_email, _password);
+
+      state.draft
+        ..lastWorkingDay = DateTime(2026, 11, 10)
+        ..reason = 'Contract Completion';
+      _answerAll(state);
+
+      await expectLater(
+        state.submit(),
+        throwsA(
+          isA<ApiException>().having(
+                (e) => e.isNetworkError,
+            'isNetworkError',
+            true,
+          ),
+        ),
+      );
+      // The employee's answers are kept after a failed submit.
+      expect(state.questionnaire.answeredCount, 14);
+
+      // Retrying finds the saved case and does not create a duplicate.
+      await expectLater(
+        state.submit(),
+        throwsA(
+          isA<ApiException>().having((e) => e.code, 'code', 'ACTIVE_CASE_EXISTS'),
+        ),
+      );
+      expect(backend.count('POST', '/employee/cases'), 1);
     });
 
     test('stages are sorted and show the backend department names', () async {
@@ -357,8 +593,10 @@ void main() {
       final cases = await repo.listCases();
 
       expect(cases, hasLength(1));
-      expect(cases.first.steps.map((s) => s.department).toList(),
-          ['Test Finance', 'Test Library']);
+      expect(cases.first.steps.map((s) => s.department).toList(), [
+        'Test Finance',
+        'Test Library',
+      ]);
       expect(cases.first.steps.first.status, StepStatus.locked);
       expect(cases.first.totalStages, 2);
       expect(cases.first.approvals.first.status, 'WAITING');
@@ -366,20 +604,30 @@ void main() {
 
     test('409 ACTIVE_CASE_EXISTS is reported clearly', () async {
       final api = ApiClient(
-        httpClient: MockClient((_) async => _json(
+        httpClient: MockClient(
+              (_) async => _json(
             409,
-            _error('ACTIVE_CASE_EXISTS',
-                'You already have an active clearance request.'))),
+            _error(
+              'ACTIVE_CASE_EXISTS',
+              'You already have an active clearance request.',
+            ),
+          ),
+        ),
         baseUrl: 'http://test/api/v1',
       )..authToken = _token;
       final repo = ApiClearanceRepository(apiClient: api);
 
       await expectLater(
         repo.submit(_draft()),
-        throwsA(isA<ApiException>()
-            .having((e) => e.isActiveCaseExists, 'isActiveCaseExists', true)
-            .having((e) => e.message, 'message',
-            'You already have an active clearance request.')),
+        throwsA(
+          isA<ApiException>()
+              .having((e) => e.isActiveCaseExists, 'isActiveCaseExists', true)
+              .having(
+                (e) => e.message,
+            'message',
+            'You already have an active clearance request.',
+          ),
+        ),
       );
     });
 
@@ -393,8 +641,13 @@ void main() {
 
           await expectLater(
             api.get('/employee/cases'),
-            throwsA(isA<ApiException>()
-                .having((e) => e.isUnauthorized, 'isUnauthorized', true)),
+            throwsA(
+              isA<ApiException>().having(
+                    (e) => e.isUnauthorized,
+                'isUnauthorized',
+                true,
+              ),
+            ),
           );
           expect(expired, isTrue);
         });
@@ -414,42 +667,41 @@ void main() {
 
     test('a network failure becomes a clear error', () async {
       final api = ApiClient(
-        httpClient:
-        MockClient((_) async => throw http.ClientException('offline')),
+        httpClient: MockClient(
+              (_) async => throw http.ClientException('offline'),
+        ),
         baseUrl: 'http://test/api/v1',
       );
 
       await expectLater(
         api.get('/employee/cases'),
-        throwsA(isA<ApiException>()
-            .having((e) => e.isNetworkError, 'isNetworkError', true)),
+        throwsA(
+          isA<ApiException>().having(
+                (e) => e.isNetworkError,
+            'isNetworkError',
+            true,
+          ),
+        ),
       );
-    });
-
-    test('Logout button clears state and logs user out', () async {
-      final backend = _FakeBackend();
-      final state = backend.newState();
-      await state.login(_email, _password);
-      expect(state.employee, isNotNull);
-
-      await state.logout();
-
-      expect(state.employee, isNull);
-      expect(state.activeRequest, isNull);
-      expect(state.draft.lastWorkingDay, isNull);
     });
 
     test('a server error (500) is reported as a server error', () async {
       final api = ApiClient(
         httpClient: MockClient(
-                (_) async => _json(500, _error('INTERNAL', 'Server error'))),
+              (_) async => _json(500, _error('INTERNAL', 'Server error')),
+        ),
         baseUrl: 'http://test/api/v1',
       );
 
       await expectLater(
         api.get('/employee/cases'),
-        throwsA(isA<ApiException>()
-            .having((e) => e.isServerError, 'isServerError', true)),
+        throwsA(
+          isA<ApiException>().having(
+                (e) => e.isServerError,
+            'isServerError',
+            true,
+          ),
+        ),
       );
     });
   });

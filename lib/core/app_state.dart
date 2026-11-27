@@ -51,14 +51,39 @@ class AppState extends ChangeNotifier {
   bool _submitting = false;
   bool get isSubmitting => _submitting;
 
+  /// Set after an uncertain submit (timeout or unreadable reply). The cases
+  /// must be reloaded before another submit is allowed.
+  bool _mustReloadFirst = false;
+
   // Form values live here, so they survive moving between screens.
   final ClearanceDraft draft = ClearanceDraft();
 
-  /// Questionnaire answers (local mock, never sent to the backend yet).
+  /// The 14 questionnaire answers the employee is filling in.
   final QuestionnaireDraft questionnaire = QuestionnaireDraft();
 
-  /// Mock request that ends at Pending HR Verification (UI only).
-  PendingHrRequest? pendingHrRequest;
+  /// Local mock used only while kMockQuestionnaireSubmit is true.
+  PendingHrRequest? _mockPendingHrRequest;
+
+  /// The request waiting for HR. A real backend case with status
+  /// PENDING_HR_VERIFICATION wins; otherwise the local mock (if any).
+  PendingHrRequest? get pendingHrRequest {
+    final real = activeRequest;
+    if (real != null && real.isPendingHr) {
+      final answers = real.questionnaireAnswers;
+      int count(QuestionAnswer a) =>
+          answers == null ? 0 : answers.values.where((v) => v == a).length;
+      return PendingHrRequest(
+        reference: real.id,
+        // The backend always sets submittedAt for a pending case.
+        submittedAt: real.submittedAt ?? DateTime.now(),
+        lastWorkingDay: real.lastWorkingDay,
+        likelyApplicable: count(QuestionAnswer.yes),
+        reportedNotApplicable: count(QuestionAnswer.no),
+        needsVerification: count(QuestionAnswer.notSure),
+      );
+    }
+    return _mockPendingHrRequest;
+  }
 
   bool get hasActiveRequest => activeRequest != null;
 
@@ -113,6 +138,7 @@ class AppState extends ChangeNotifier {
 
   /// Loads the employee's cases from the backend.
   /// Call this when the Progress or Dashboard screen opens.
+  /// This is a normal GET. It never triggers a check.
   Future<void> refreshCases() async {
     final cases = await _clearance.listCases();
     final open = cases.where((c) => c.status != 'CANCELLED').toList();
@@ -124,6 +150,9 @@ class AppState extends ChangeNotifier {
 
   DateTime _time(ClearanceRequest c) =>
       c.submittedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+
+  bool _isClosed(ClearanceRequest c) =>
+      c.status == 'COMPLETED' || c.status == 'CANCELLED';
 
   Future<void> _loadCasesQuietly() async {
     try {
@@ -170,23 +199,26 @@ class AppState extends ChangeNotifier {
     casesError = null;
     draft.clear();
     questionnaire.clear();
-    pendingHrRequest = null;
+    _mockPendingHrRequest = null;
+    _mustReloadFirst = false;
   }
 
-  /// Mock submit for this sprint. No network call. Ends at Pending HR.
+  /// Mock submit, used only while kMockQuestionnaireSubmit is true.
+  /// No network call. Ends at Pending HR.
   Future<void> submitForHrReview() async {
     if (_submitting) return;
     _submitting = true;
     notifyListeners();
     try {
       await Future<void>.delayed(const Duration(milliseconds: 600));
-      pendingHrRequest = PendingHrRequest(
+      _mockPendingHrRequest = PendingHrRequest(
         reference: kMockRequestReference,
         submittedAt: DateTime.now(),
         lastWorkingDay: draft.lastWorkingDay ?? DateTime.now(),
         likelyApplicable: questionnaire.countOf(QuestionAnswer.yes),
         reportedNotApplicable: questionnaire.countOf(QuestionAnswer.no),
         needsVerification: questionnaire.countOf(QuestionAnswer.notSure),
+        isMock: true,
       );
       questionnaire.clear();
       draft.clear();
@@ -196,15 +228,48 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  /// Sends the request to the backend. The case only exists after the
-  /// server confirms it. Any error is thrown to the screen.
+  /// Sends the request and the 14 questionnaire answers to the backend.
+  /// The case only exists after the server confirms it (201). Any error is
+  /// thrown to the screen. Answers are kept if the submit fails.
   Future<void> submit() async {
     if (_submitting) return;
+
+    // All 14 answers are required. Never default an unanswered question.
+    final answers = questionnaire.toApiAnswers(kQuestionnaireApiKeys);
+    if (answers == null) {
+      throw ApiException(
+        message: 'Please answer all 14 questions.',
+        statusCode: 422,
+        code: 'VALIDATION_ERROR',
+      );
+    }
+
     _submitting = true;
     notifyListeners();
     try {
-      activeRequest = await _clearance.submit(draft);
+      if (_mustReloadFirst) {
+        // The last submit may or may not have reached the server.
+        await refreshCases();
+        _mustReloadFirst = false;
+        final existing = activeRequest;
+        if (existing != null && !_isClosed(existing)) {
+          throw ApiException(
+            message: 'You already have an active clearance case.',
+            statusCode: 409,
+            code: 'ACTIVE_CASE_EXISTS',
+          );
+        }
+      }
+
+      activeRequest = await _clearance.submit(
+        draft,
+        questionnaireAnswers: answers,
+      );
       draft.clear();
+      questionnaire.clear();
+    } on ApiException catch (e) {
+      if (e.isNetworkError) _mustReloadFirst = true;
+      rethrow;
     } finally {
       _submitting = false;
       notifyListeners();

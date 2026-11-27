@@ -14,6 +14,8 @@ class SuccessScreen extends StatelessWidget {
     switch (status) {
       case 'IN_PROGRESS':
         return 'In Progress';
+      case 'PENDING_HR_VERIFICATION':
+        return 'Pending HR Verification';
       case 'PENDING_SUBMISSION':
         return 'Pending Submission';
       case 'ACTION_REQUIRED':
@@ -55,8 +57,11 @@ class SuccessScreen extends StatelessWidget {
                       color: Color(0xFFE5F5EA),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.check,
-                        size: 38, color: Color(0xFF16803C)),
+                    child: const Icon(
+                      Icons.check,
+                      size: 38,
+                      color: Color(0xFF16803C),
+                    ),
                   ),
                   const SizedBox(height: 22),
                   Padding(
@@ -86,9 +91,10 @@ class SuccessScreen extends StatelessWidget {
                           'can track its status at any time.',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                          fontSize: 12.5,
-                          height: 1.4,
-                          color: AppTheme.textMuted),
+                        fontSize: 12.5,
+                        height: 1.4,
+                        color: AppTheme.textMuted,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 28),
@@ -103,7 +109,9 @@ class SuccessScreen extends StatelessWidget {
                         ? Column(
                       children: [
                         _InfoRow(
-                          label: 'Request ID (mock)',
+                          label: pending.isMock
+                              ? 'Request ID (mock)'
+                              : 'Request ID',
                           child: Text(
                             pending.reference,
                             style: const TextStyle(
@@ -135,7 +143,9 @@ class SuccessScreen extends StatelessWidget {
                         ),
                         const _Divider(),
                         _InfoRow(
-                          label: 'Submitted (mock)',
+                          label: pending.isMock
+                              ? 'Submitted (mock)'
+                              : 'Submitted',
                           child: Text(
                             formatDateTime(pending.submittedAt),
                             style: const TextStyle(
@@ -180,7 +190,8 @@ class SuccessScreen extends StatelessWidget {
                         _InfoRow(
                           label: 'Status',
                           child: _StatusBadge(
-                              _statusLabel(request?.status ?? '')),
+                            _statusLabel(request?.status ?? ''),
+                          ),
                         ),
                         if (request?.submittedAt != null) ...[
                           const _Divider(),
@@ -209,9 +220,10 @@ class SuccessScreen extends StatelessWidget {
                     child: const Text(
                       'Go to Home',
                       style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.primary),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.primary,
+                      ),
                     ),
                   ),
                 ],
@@ -234,7 +246,8 @@ class SuccessScreen extends StatelessWidget {
                   style: FilledButton.styleFrom(
                     backgroundColor: AppTheme.primary,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                   onPressed: () =>
                       Navigator.pushNamed(context, AppRoutes.progress),
@@ -243,7 +256,9 @@ class SuccessScreen extends StatelessWidget {
                         ? 'Track Request'
                         : 'Track Clearance Progress',
                     style: const TextStyle(
-                        fontSize: 14, fontWeight: FontWeight.w700),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),
@@ -276,8 +291,7 @@ class _InfoRow extends StatelessWidget {
       children: [
         Text(
           label,
-          style:
-          const TextStyle(fontSize: 12.5, color: AppTheme.textMuted),
+          style: const TextStyle(fontSize: 12.5, color: AppTheme.textMuted),
         ),
         const SizedBox(width: 16),
         Flexible(child: child),
@@ -305,9 +319,10 @@ class _StatusBadge extends StatelessWidget {
         Text(
           label,
           style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.primary),
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.primary,
+          ),
         ),
       ],
     ),

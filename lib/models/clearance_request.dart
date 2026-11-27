@@ -1,3 +1,5 @@
+import 'department_questionnaire.dart';
+
 enum StepStatus { cleared, processing, outstanding, locked }
 
 StepStatus _stageStatus(String? s) {
@@ -77,8 +79,73 @@ class ApprovalStep {
   }
 }
 
-/// What the employee types into the form. Only these three values
-/// are sent to the server.
+/// HR confirmation metadata. Null on the case until HR has confirmed.
+class HrSelection {
+  const HrSelection({this.verifiedAt, this.selectionRevision = 0});
+
+  final DateTime? verifiedAt;
+  final int selectionRevision;
+
+  factory HrSelection.fromJson(Map<String, dynamic> json) => HrSelection(
+    verifiedAt: DateTime.tryParse(json['verifiedAt']?.toString() ?? '')
+        ?.toLocal(),
+    selectionRevision: (json['selectionRevision'] as num?)?.toInt() ?? 0,
+  );
+}
+
+/// A department the backend suggests. Advice only, never a requirement.
+class RecommendedDepartment {
+  const RecommendedDepartment({
+    required this.departmentId,
+    required this.departmentCode,
+    required this.departmentName,
+    this.reason,
+  });
+
+  final String departmentId;
+  final String departmentCode;
+  final String departmentName;
+  final String? reason;
+
+  factory RecommendedDepartment.fromJson(Map<String, dynamic> json) =>
+      RecommendedDepartment(
+        departmentId: json['departmentId']?.toString() ?? '',
+        departmentCode: json['departmentCode']?.toString() ?? '',
+        departmentName: json['departmentName']?.toString() ?? '',
+        reason: json['reason']?.toString(),
+      );
+}
+
+/// Parsed so nothing breaks, but NOT shown on the Employee screens.
+/// Recommendations must never be displayed as confirmed requirements.
+class DepartmentRecommendation {
+  const DepartmentRecommendation({
+    required this.status,
+    this.ruleVersion,
+    this.departments = const [],
+  });
+
+  /// AVAILABLE or UNAVAILABLE.
+  final String status;
+  final String? ruleVersion;
+  final List<RecommendedDepartment> departments;
+
+  factory DepartmentRecommendation.fromJson(Map<String, dynamic> json) {
+    final list = (json['departments'] as List? ?? const [])
+        .whereType<Map>()
+        .map((m) =>
+        RecommendedDepartment.fromJson(Map<String, dynamic>.from(m)))
+        .toList();
+    return DepartmentRecommendation(
+      status: json['status']?.toString() ?? 'UNAVAILABLE',
+      ruleVersion: json['ruleVersion']?.toString(),
+      departments: list,
+    );
+  }
+}
+
+/// What the employee types into the form. The form values and the
+/// questionnaire answers are sent to the server. Nothing else.
 class ClearanceDraft {
   DateTime? lastWorkingDay;
   String? reason;
@@ -99,6 +166,8 @@ class ClearanceDraft {
 
 /// A real clearance case returned by the backend.
 class ClearanceRequest {
+  static const pendingHrStatus = 'PENDING_HR_VERIFICATION';
+
   final String _caseId;
 
   /// Database ID of the case (used for GET /employee/cases/:caseId).
@@ -107,7 +176,7 @@ class ClearanceRequest {
   /// The request code shown to the user (from the backend `requestCode`).
   final String id;
 
-  /// Backend case status, e.g. IN_PROGRESS.
+  /// Backend case status, e.g. IN_PROGRESS or PENDING_HR_VERIFICATION.
   final String status;
 
   final DateTime? submittedAt;
@@ -122,6 +191,17 @@ class ClearanceRequest {
   final int clearedStages;
   final int outstandingStages;
   final int skippedStages;
+
+  /// Null on old cases submitted before the questionnaire existed.
+  final String? questionnaireVersion;
+  final Map<String, QuestionAnswer>? questionnaireAnswers;
+
+  /// Parsed only. Never displayed on the Employee screens.
+  final DepartmentRecommendation? recommendation;
+
+  /// Null until HR confirms the applicable departments.
+  final HrSelection? hrSelection;
+  final List<String> confirmedDepartmentIds;
 
   final String _phone;
   final String _forwardingAddress;
@@ -143,6 +223,11 @@ class ClearanceRequest {
     this.clearedStages = 0,
     this.outstandingStages = 0,
     this.skippedStages = 0,
+    this.questionnaireVersion,
+    this.questionnaireAnswers,
+    this.recommendation,
+    this.hrSelection,
+    this.confirmedDepartmentIds = const [],
     String phone = '',
     String forwardingAddress = '',
   })  : _caseId = caseId,
@@ -167,6 +252,20 @@ class ClearanceRequest {
         : const <String, dynamic>{};
     int count(String key) => (progress[key] as num?)?.toInt() ?? 0;
 
+    // Questionnaire answers: only exact YES / NO / NOT_SURE are accepted.
+    Map<String, QuestionAnswer>? answers;
+    final rawAnswers = json['questionnaireAnswers'];
+    if (rawAnswers is Map) {
+      answers = {};
+      rawAnswers.forEach((k, v) {
+        final a = questionAnswerFromApi(v?.toString());
+        if (a != null) answers![k.toString()] = a;
+      });
+    }
+
+    final rawRecommendation = json['departmentRecommendation'];
+    final rawSelection = json['hrSelection'];
+
     return ClearanceRequest(
       caseId: json['id'] as String,
       id: json['requestCode'] as String,
@@ -182,12 +281,33 @@ class ClearanceRequest {
       clearedStages: count('clearedStages'),
       outstandingStages: count('outstandingStages'),
       skippedStages: count('skippedStages'),
+      questionnaireVersion: json['questionnaireVersion']?.toString(),
+      questionnaireAnswers: answers,
+      recommendation: rawRecommendation is Map
+          ? DepartmentRecommendation.fromJson(
+          Map<String, dynamic>.from(rawRecommendation))
+          : null,
+      hrSelection: rawSelection is Map
+          ? HrSelection.fromJson(Map<String, dynamic>.from(rawSelection))
+          : null,
+      confirmedDepartmentIds:
+      (json['confirmedDepartmentIds'] as List? ?? const [])
+          .map((e) => e.toString())
+          .toList(),
     );
   }
+
+  /// True while HR has not yet confirmed which departments apply.
+  /// Stages are empty in this state. That is NOT a completed clearance.
+  bool get isPendingHr => status == pendingHrStatus;
+
+  /// True only after HR confirmed (or on old cases that already have stages).
+  bool get hasConfirmedStages => steps.isNotEmpty;
 
   int get clearedCount =>
       steps.where((s) => s.status == StepStatus.cleared).length;
 
+  /// 0 when there are no stages. Zero never means complete.
   double get progress => steps.isEmpty ? 0 : clearedCount / steps.length;
 
   /// First stage that is not cleared yet (null when everything is cleared).
@@ -199,10 +319,11 @@ class ClearanceRequest {
   }
 
   /// Overall status shown on the dashboard and progress screens.
+  /// With no stages (for example Pending HR) nothing has started, so the
+  /// status is locked, never processing and never cleared.
   StepStatus get overallStatus {
-    if (steps.isNotEmpty && clearedCount == steps.length) {
-      return StepStatus.cleared;
-    }
+    if (steps.isEmpty) return StepStatus.locked;
+    if (clearedCount == steps.length) return StepStatus.cleared;
     if (steps.any((s) => s.status == StepStatus.outstanding)) {
       return StepStatus.outstanding;
     }

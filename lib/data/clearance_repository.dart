@@ -1,9 +1,13 @@
 import '../core/network/api_client.dart';
 import '../core/network/api_exception.dart';
 import '../models/clearance_request.dart';
+import '../models/department_questionnaire.dart';
 
 abstract class ClearanceRepository {
-  Future<ClearanceRequest> submit(ClearanceDraft draft);
+  Future<ClearanceRequest> submit(
+      ClearanceDraft draft, {
+        Map<String, QuestionAnswer>? questionnaireAnswers,
+      });
   Future<List<ClearanceRequest>> listCases();
   Future<ClearanceRequest> getCase(String caseId);
 }
@@ -14,7 +18,10 @@ class ApiClearanceRepository implements ClearanceRepository {
   final ApiClient _api;
 
   @override
-  Future<ClearanceRequest> submit(ClearanceDraft draft) async {
+  Future<ClearanceRequest> submit(
+      ClearanceDraft draft, {
+        Map<String, QuestionAnswer>? questionnaireAnswers,
+      }) async {
     final day = draft.lastWorkingDay;
     final reason = draft.reason?.trim() ?? '';
     final remarks = draft.remarks.trim();
@@ -29,12 +36,30 @@ class ApiClearanceRepository implements ClearanceRepository {
       throw _invalid('Remarks must be at most 1000 characters.');
     }
 
-    // Exactly the three fields the backend accepts. Nothing else is sent.
-    final data = await _api.post('/employee/cases', body: {
+    // The backend requires all 14 answers. Never send a partial set and
+    // never fill an unanswered question with a default.
+    if (questionnaireAnswers != null) {
+      final keys = questionnaireAnswers.keys.toSet();
+      if (keys.length != kQuestionnaireApiKeys.length ||
+          !keys.containsAll(kQuestionnaireApiKeys)) {
+        throw _invalid('Please answer all 14 questions.');
+      }
+    }
+
+    // Only these fields are sent. No IDs, statuses, recommendations or
+    // department assignments: the server derives them.
+    final body = <String, dynamic>{
       'lastWorkingDate': _isoDate(day),
       'reasonForLeaving': reason,
       'employeeRemarks': remarks.isEmpty ? null : remarks,
-    });
+    };
+    if (questionnaireAnswers != null) {
+      body['questionnaireAnswers'] = {
+        for (final e in questionnaireAnswers.entries) e.key: e.value.apiValue,
+      };
+    }
+
+    final data = await _api.post('/employee/cases', body: body);
     return _parseCase(data);
   }
 
