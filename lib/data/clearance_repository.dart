@@ -29,12 +29,14 @@ class ApiClearanceRepository implements ClearanceRepository {
       throw _invalid('Remarks must be at most 1000 characters.');
     }
 
-    // Exactly the three fields the backend accepts. Nothing else is sent.
-    final data = await _api.post('/employee/cases', body: {
-      'lastWorkingDate': _isoDate(day),
-      'reasonForLeaving': reason,
-      'employeeRemarks': remarks.isEmpty ? null : remarks,
-    });
+    final data = await _api.post(
+      '/employee/cases',
+      body: {
+        'lastWorkingDate': _isoDate(day),
+        'reasonForLeaving': reason,
+        'employeeRemarks': remarks.isEmpty ? null : remarks,
+      },
+    );
     return _parseCase(data);
   }
 

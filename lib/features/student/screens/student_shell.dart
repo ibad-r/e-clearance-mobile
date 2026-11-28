@@ -20,13 +20,15 @@ class StudentShell extends StatefulWidget {
   State<StudentShell> createState() => _StudentShellState();
 }
 
-class _StudentShellState extends State<StudentShell> {
+class _StudentShellState extends State<StudentShell>
+    with WidgetsBindingObserver {
   late final StudentState _state;
   int _index = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Reuses the shared ApiClient (and its token) from AppState.
     final app = context.read<AppState>();
     _state = StudentState(
@@ -39,8 +41,26 @@ class _StudentShellState extends State<StudentShell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _state.dispose();
     super.dispose();
+  }
+
+  /// Reload the saved results when the app returns to the foreground.
+  /// A normal GET. It never triggers a check.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    if (lifecycleState == AppLifecycleState.resumed) {
+      unawaited(_state.refreshDashboard(quiet: true));
+    }
+  }
+
+  /// Switches tab. Opening the Dashboard or Status tab reloads saved results.
+  void _goTo(int i) {
+    setState(() => _index = i);
+    if (i == 0 || i == 2) {
+      unawaited(_state.refreshDashboard(quiet: true));
+    }
   }
 
   void _push(Widget screen) {
@@ -56,7 +76,7 @@ class _StudentShellState extends State<StudentShell> {
   }
 
   void _openReview() {
-    _push(StudentReviewScreen(onGoToTab: (i) => setState(() => _index = i)));
+    _push(StudentReviewScreen(onGoToTab: _goTo));
   }
 
   void _openDetails() => _push(const StudentDetailsScreen());
@@ -72,8 +92,8 @@ class _StudentShellState extends State<StudentShell> {
           index: _index,
           children: [
             StudentDashboardScreen(
-              onNewRequest: () => setState(() => _index = 1),
-              onViewStatus: () => setState(() => _index = 2),
+              onNewRequest: () => _goTo(1),
+              onViewStatus: () => _goTo(2),
               onViewHistory: _openHistory,
             ),
             StudentRequestScreen(onReview: _openReview),
@@ -83,16 +103,21 @@ class _StudentShellState extends State<StudentShell> {
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
+          onDestinationSelected: _goTo,
           destinations: const [
             NavigationDestination(
-                icon: Icon(Icons.home_outlined), label: 'Dashboard'),
+              icon: Icon(Icons.home_outlined),
+              label: 'Dashboard',
+            ),
             NavigationDestination(
-                icon: Icon(Icons.note_add_outlined), label: 'Request'),
+              icon: Icon(Icons.note_add_outlined),
+              label: 'Request',
+            ),
+            NavigationDestination(icon: Icon(Icons.checklist), label: 'Status'),
             NavigationDestination(
-                icon: Icon(Icons.checklist), label: 'Status'),
-            NavigationDestination(
-                icon: Icon(Icons.person_outline), label: 'Profile'),
+              icon: Icon(Icons.person_outline),
+              label: 'Profile',
+            ),
           ],
         ),
       ),

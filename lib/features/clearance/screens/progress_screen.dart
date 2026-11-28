@@ -7,6 +7,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../core/widgets/step_status_badge.dart';
 import '../../../models/clearance_request.dart';
+import 'department_issue_screen.dart';
 
 const _red = Color(0xFFC62828);
 
@@ -27,7 +28,7 @@ String _caseStatusLabel(String status) {
     case 'CANCELLED':
       return 'Cancelled';
     default:
-      return status.isEmpty ? '—' : status.replaceAll('_', ' ');
+      return 'Pending';
   }
 }
 
@@ -55,15 +56,31 @@ class ProgressScreen extends StatefulWidget {
   State<ProgressScreen> createState() => _ProgressScreenState();
 }
 
-class _ProgressScreenState extends State<ProgressScreen> {
+class _ProgressScreenState extends State<ProgressScreen>
+    with WidgetsBindingObserver {
   bool _loading = true;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Always load the case from the backend when this screen opens.
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        ModalRoute.of(context)?.isCurrent == true) {
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -90,6 +107,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
   Color _segmentColor(ClearanceRequest r, DepartmentStep s) {
     if (s.status == StepStatus.cleared) return const Color(0xFF16803C);
+    if (s.status == StepStatus.notApplicable) return const Color(0xFF64748B);
     if (identical(s, r.currentStep)) {
       return s.status == StepStatus.outstanding ? _red : AppTheme.primary;
     }
@@ -109,9 +127,10 @@ class _ProgressScreenState extends State<ProgressScreen> {
         title: const Text(
           'Clearance Progress',
           style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textDark),
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textDark,
+          ),
         ),
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
@@ -133,34 +152,30 @@ class _ProgressScreenState extends State<ProgressScreen> {
       }
       return const Center(child: Text('No active clearance'));
     }
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: _content(request),
-    );
+    return RefreshIndicator(onRefresh: _load, child: _content(request));
   }
 
   Widget _content(ClearanceRequest request) {
     final steps = request.steps;
     final stageCount = steps.length;
 
-    // Use the progress counts sent by the backend. If they are missing,
-    // fall back to counting the stages.
-    final hasCounts = request.totalStages > 0;
-    final total = hasCounts ? request.totalStages : stageCount;
-    final cleared = hasCounts ? request.clearedStages : request.clearedCount;
-    final percent = total == 0 ? 0 : ((cleared / total) * 100).round();
+    final total = request.stageCount;
+    final percent = (request.progress * 100).round();
+    final certificateId = request.availableCertificateId;
 
     final current = request.currentStep;
     final stageNo = current == null ? stageCount : steps.indexOf(current) + 1;
     final isOutstanding = current?.status == StepStatus.outstanding;
 
     String whereAmI;
-    if (stageCount == 0) {
+    if (request.isCompleted) {
+      whereAmI = 'Clearance complete';
+    } else if (stageCount == 0) {
       whereAmI = 'No stages available yet';
     } else if (current == null) {
-      whereAmI = 'All stages cleared';
+      whereAmI = 'Waiting for completion confirmation';
     } else {
-      whereAmI = 'Stage $stageNo of $stageCount · ${current.department}';
+      whereAmI = 'Stage $stageNo of $total · ${current.department}';
     }
 
     String checkingNow;
@@ -176,17 +191,20 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
     String nextStep;
     if (isOutstanding) {
-      nextStep = 'Resolve the issue with the department';
+      nextStep = 'Open the current stage for resolution details';
+    } else if (request.isCompleted) {
+      nextStep = certificateId == null
+          ? 'Awaiting certificate'
+          : 'View certificate';
     } else if (current == null) {
-      nextStep = stageCount == 0 ? 'Waiting for stages' : 'Final approval';
+      nextStep = 'Refresh to check for updates';
     } else {
       nextStep = 'Waiting for ${current.department}';
     }
 
-    final clearedText = cleared == 0
-        ? 'Nothing yet'
-        : '$cleared of $total stages'
-        '${request.skippedStages > 0 ? ' (${request.skippedStages} skipped)' : ''}';
+    final evaluatedText =
+        '${request.clearedCount} cleared · '
+        '${request.notApplicableCount} not applicable';
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -215,38 +233,51 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Flexible(
-                    child: Text(request.id,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 11.5,
-                            color: AppTheme.textMuted)),
+                    child: Text(
+                      request.id,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 11.5,
+                        color: AppTheme.textMuted,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 8),
-                  _CaseStatusChip(_caseStatusLabel(request.status)),
+                  _CaseStatusChip(
+                    _caseStatusLabel(
+                      request.status == 'COMPLETED' && !request.isCompleted
+                          ? 'IN_PROGRESS'
+                          : request.status,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('$percent%',
-                      style: const TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          color: AppTheme.textDark)),
+                  Text(
+                    '$percent%',
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.textDark,
+                    ),
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 4),
                       child: Text(
-                        'Overall progress · $cleared of $total cleared',
+                        '${request.evaluatedCount} of $total evaluated',
                         textAlign: TextAlign.end,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.textMuted),
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textMuted,
+                        ),
                       ),
                     ),
                   ),
@@ -276,7 +307,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(child: _Info('Where am I?', whereAmI)),
-                  Expanded(child: _Info('Cleared', clearedText)),
+                  Expanded(child: _Info('Evaluated stages', evaluatedText)),
                 ],
               ),
               const SizedBox(height: 14),
@@ -288,7 +319,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     child: _Info(
                       'Blocking you',
                       isOutstanding
-                          ? (current!.note ?? 'Outstanding issue')
+                          ? (request.openIssueFor(current!)?.reason ??
+                                current.note ??
+                                'Outstanding issue')
                           : 'Nothing',
                       valueColor: isOutstanding ? _red : null,
                     ),
@@ -301,9 +334,34 @@ class _ProgressScreenState extends State<ProgressScreen> {
           ),
         ),
         const SizedBox(height: 16),
+        if (certificateId != null) ...[
+          OutlinedButton.icon(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (dialogContext) => AlertDialog(
+                title: const Text('Clearance Certificate'),
+                content: SelectableText(
+                  'Certificate reference: $certificateId',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('Close'),
+                  ),
+                ],
+              ),
+            ),
+            icon: const Icon(Icons.verified_outlined),
+            label: const Text('View Certificate Details'),
+          ),
+          const SizedBox(height: 16),
+        ],
         // Request details from the backend
         _InfoCard([
-          _DetailRow('Last Working Day', formatLongDate(request.lastWorkingDay)),
+          _DetailRow(
+            'Last Working Day',
+            formatLongDate(request.lastWorkingDay),
+          ),
           _DetailRow('Reason for Leaving', request.reason),
           if (request.remarks.trim().isNotEmpty)
             _DetailRow('Remarks', request.remarks),
@@ -311,65 +369,63 @@ class _ProgressScreenState extends State<ProgressScreen> {
             _DetailRow('Submitted', formatDateTime(request.submittedAt!)),
         ]),
         const SizedBox(height: 22),
-        const Text('Clearance timeline',
-            style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-                color: AppTheme.textDark)),
+        const Text(
+          'Clearance timeline',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: AppTheme.textDark,
+          ),
+        ),
         const SizedBox(height: 12),
         if (stageCount == 0)
           const Padding(
             padding: EdgeInsets.only(bottom: 12),
-            child: Text('No stages have been created for this request yet.',
-                style: TextStyle(fontSize: 12.5, color: AppTheme.textMuted)),
+            child: Text(
+              'No stages have been created for this request yet.',
+              style: TextStyle(fontSize: 12.5, color: AppTheme.textMuted),
+            ),
           ),
         for (var i = 0; i < stageCount; i++)
           _TimelineTile(
             step: steps[i],
             isLast: i == stageCount - 1,
-            waitingFor: i == 0 || current == null || identical(current, steps[i])
+            onViewIssue: identical(current, steps[i]) && isOutstanding
+                ? () => _openIssue(request, steps[i])
+                : null,
+            waitingFor:
+                i == 0 || current == null || identical(current, steps[i])
                 ? 'Waiting to start'
                 : 'Waiting for ${current.department}',
           ),
         if (request.approvals.isNotEmpty) ...[
           const SizedBox(height: 10),
-          const Text('Approvals',
-              style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.textDark)),
+          const Text(
+            'Approvals',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.textDark,
+            ),
+          ),
           const SizedBox(height: 12),
           _InfoCard([
             for (final a in request.approvals)
               _DetailRow(a.positionTitle, _approvalStatusLabel(a.status)),
           ]),
         ],
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AppTheme.infoBg,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFFD3DEF8)),
-          ),
-          child: const Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.lock_outline, size: 16, color: AppTheme.primary),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Only the authorized departments and officials can clear '
-                      'a stage. You cannot approve or clear anything from this '
-                      'app.',
-                  style: TextStyle(fontSize: 12, color: AppTheme.primary),
-                ),
-              ),
-            ],
-          ),
-        ),
       ],
     );
+  }
+
+  Future<void> _openIssue(ClearanceRequest request, DepartmentStep step) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) =>
+            DepartmentIssueScreen(caseId: request.caseId, step: step),
+      ),
+    );
+    if (mounted) await _load();
   }
 }
 
@@ -385,13 +441,17 @@ class _ErrorView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.cloud_off_outlined,
-              size: 36, color: AppTheme.textMuted),
+          const Icon(
+            Icons.cloud_off_outlined,
+            size: 36,
+            color: AppTheme.textMuted,
+          ),
           const SizedBox(height: 12),
-          Text(message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 13, color: AppTheme.textDark)),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13, color: AppTheme.textDark),
+          ),
           const SizedBox(height: 12),
           OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
         ],
@@ -416,8 +476,10 @@ class _ErrorBanner extends StatelessWidget {
     child: Row(
       children: [
         Expanded(
-          child: Text(message,
-              style: const TextStyle(color: _red, fontSize: 12.5)),
+          child: Text(
+            message,
+            style: const TextStyle(color: _red, fontSize: 12.5),
+          ),
         ),
         TextButton(onPressed: onRetry, child: const Text('Retry')),
       ],
@@ -439,9 +501,10 @@ class _CaseStatusChip extends StatelessWidget {
     child: Text(
       label,
       style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: AppTheme.primary),
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: AppTheme.primary,
+      ),
     ),
   );
 }
@@ -462,8 +525,7 @@ class _InfoCard extends StatelessWidget {
       children: [
         for (var i = 0; i < rows.length; i++) ...[
           if (i > 0)
-            const Divider(
-                height: 1, thickness: 1, color: Color(0xFFF1F4F8)),
+            const Divider(height: 1, thickness: 1, color: Color(0xFFF1F4F8)),
           rows[i],
         ],
       ],
@@ -483,9 +545,10 @@ class _DetailRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Flexible(
-          child: Text(label,
-              style:
-              const TextStyle(fontSize: 12.5, color: AppTheme.textMuted)),
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 12.5, color: AppTheme.textMuted),
+          ),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -493,9 +556,10 @@ class _DetailRow extends StatelessWidget {
             value,
             textAlign: TextAlign.right,
             style: const TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.textDark),
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textDark,
+            ),
           ),
         ),
       ],
@@ -514,14 +578,19 @@ class _Info extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+        ),
         const SizedBox(height: 3),
-        Text(value,
-            style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: valueColor ?? AppTheme.textDark)),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w700,
+            color: valueColor ?? AppTheme.textDark,
+          ),
+        ),
       ],
     );
   }
@@ -531,28 +600,35 @@ class _TimelineTile extends StatelessWidget {
   final DepartmentStep step;
   final bool isLast;
   final String waitingFor;
+  final VoidCallback? onViewIssue;
   const _TimelineTile({
     required this.step,
     required this.isLast,
     required this.waitingFor,
+    this.onViewIssue,
   });
 
   (Color, Color, IconData) get _dot => switch (step.status) {
     StepStatus.cleared => (
-    const Color(0xFFE5F5EA),
-    const Color(0xFF16803C),
-    Icons.check
+      const Color(0xFFE5F5EA),
+      const Color(0xFF16803C),
+      Icons.check,
+    ),
+    StepStatus.notApplicable => (
+      const Color(0xFFE9EDF3),
+      const Color(0xFF64748B),
+      Icons.remove_circle_outline,
     ),
     StepStatus.processing => (
-    const Color(0xFFE6EEFC),
-    AppTheme.primary,
-    Icons.autorenew
+      const Color(0xFFE6EEFC),
+      AppTheme.primary,
+      Icons.autorenew,
     ),
     StepStatus.outstanding => (_red, Colors.white, Icons.priority_high),
     StepStatus.locked => (
-    const Color(0xFFE9EDF3),
-    const Color(0xFF64748B),
-    Icons.lock_outline
+      const Color(0xFFE9EDF3),
+      const Color(0xFF64748B),
+      Icons.lock_outline,
     ),
   };
 
@@ -568,7 +644,9 @@ class _TimelineTile extends StatelessWidget {
     } else if (locked) {
       subtitle = waitingFor;
     } else if (step.status == StepStatus.processing) {
-      subtitle = 'Being reviewed';
+      subtitle = 'Being checked';
+    } else if (step.status == StepStatus.notApplicable) {
+      subtitle = step.note ?? 'This department does not apply';
     } else {
       subtitle = step.note ?? 'Cleared';
     }
@@ -582,8 +660,7 @@ class _TimelineTile extends StatelessWidget {
               Container(
                 width: 32,
                 height: 32,
-                decoration:
-                BoxDecoration(color: dotBg, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: dotBg, shape: BoxShape.circle),
                 child: Icon(dotIcon, size: 16, color: dotFg),
               ),
               if (!isLast)
@@ -608,66 +685,56 @@ class _TimelineTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(step.department,
-                        style: TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                            color: locked
-                                ? AppTheme.textMuted
-                                : AppTheme.textDark)),
+                    Text(
+                      step.department,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: locked ? AppTheme.textMuted : AppTheme.textDark,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerLeft,
                       child: StepStatusBadge(step.status),
                     ),
                     const SizedBox(height: 8),
-                    Text(subtitle,
-                        style: const TextStyle(
-                            fontSize: 11.5, color: AppTheme.textMuted)),
-                    if (outstanding) ...[
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: AppTheme.textMuted,
+                      ),
+                    ),
+                    if (onViewIssue != null) ...[
                       const SizedBox(height: 12),
                       FilledButton.icon(
                         style: FilledButton.styleFrom(
                           backgroundColor: _red,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
-                        onPressed: () => _showIssue(context),
+                        onPressed: onViewIssue,
                         iconAlignment: IconAlignment.end,
                         icon: const Icon(Icons.arrow_forward, size: 14),
-                        label: const Text('View Issue',
-                            style: TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w700)),
+                        label: const Text(
+                          'View Issue',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
                     ],
                   ],
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Information only. The employee can never approve a department.
-  void _showIssue(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text('${step.department} issue'),
-        content: Text(
-          step.note ??
-              'There is an outstanding issue. Please contact the '
-                  '${step.department} office to resolve it.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
           ),
         ],
       ),

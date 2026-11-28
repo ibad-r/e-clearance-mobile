@@ -1,21 +1,25 @@
-enum StepStatus { cleared, processing, outstanding, locked }
+enum StepStatus { cleared, notApplicable, processing, outstanding, locked }
 
 StepStatus _stageStatus(String? s) {
   switch (s) {
     case 'CLEARED':
-    case 'SKIPPED': // a skipped stage does not block clearance
       return StepStatus.cleared;
+    case 'NOT_APPLICABLE':
+    case 'SKIPPED': // Older Employee cases use SKIPPED.
+      return StepStatus.notApplicable;
     case 'CHECKING':
     case 'RECHECKING':
       return StepStatus.processing;
+    case 'ACTION_REQUIRED':
     case 'OUTSTANDING':
       return StepStatus.outstanding;
-    default: // LOCKED
+    default: // PENDING or legacy LOCKED
       return StepStatus.locked;
   }
 }
 
 class DepartmentStep {
+  final String? id;
   final String department;
   final StepStatus status;
   final String? note;
@@ -24,6 +28,7 @@ class DepartmentStep {
   final int? amountDue;
 
   const DepartmentStep({
+    this.id,
     required this.department,
     required this.status,
     this.note,
@@ -32,12 +37,16 @@ class DepartmentStep {
     this.amountDue,
   });
 
+  bool get isEvaluated =>
+      status == StepStatus.cleared || status == StepStatus.notApplicable;
+
   /// Example: PKR 4,500
   String? get amountLabel =>
       amountDue == null ? null : 'PKR ${_withCommas(amountDue!)}';
 
   factory DepartmentStep.fromJson(Map<String, dynamic> json) {
     return DepartmentStep(
+      id: json['id'] as String?,
       department: json['departmentName']?.toString() ?? 'Department',
       status: _stageStatus(json['status']?.toString()),
       note: json['outstandingNote']?.toString(),
@@ -77,8 +86,26 @@ class ApprovalStep {
   }
 }
 
-/// What the employee types into the form. Only these three values
-/// are sent to the server.
+class DepartmentIssue {
+  const DepartmentIssue({
+    required this.stageId,
+    required this.status,
+    required this.reason,
+  });
+
+  final String stageId;
+  final String status;
+  final String? reason;
+
+  factory DepartmentIssue.fromJson(Map<String, dynamic> json) =>
+      DepartmentIssue(
+        stageId: json['requestStageId']?.toString() ?? '',
+        status: json['status']?.toString() ?? '',
+        reason: json['reason'] as String?,
+      );
+}
+
+/// What the employee types into the request form.
 class ClearanceDraft {
   DateTime? lastWorkingDay;
   String? reason;
@@ -107,7 +134,7 @@ class ClearanceRequest {
   /// The request code shown to the user (from the backend `requestCode`).
   final String id;
 
-  /// Backend case status, e.g. IN_PROGRESS.
+  /// Backend case status, e.g. IN_PROGRESS or ACTION_REQUIRED.
   final String status;
 
   final DateTime? submittedAt;
@@ -116,6 +143,8 @@ class ClearanceRequest {
   final String remarks;
   final List<DepartmentStep> steps;
   final List<ApprovalStep> approvals;
+  final List<DepartmentIssue> issues;
+  final String? certificateId;
 
   /// Progress counts exactly as sent by the backend.
   final int totalStages;
@@ -139,15 +168,17 @@ class ClearanceRequest {
     required this.remarks,
     required this.steps,
     this.approvals = const [],
+    this.issues = const [],
+    this.certificateId,
     this.totalStages = 0,
     this.clearedStages = 0,
     this.outstandingStages = 0,
     this.skippedStages = 0,
     String phone = '',
     String forwardingAddress = '',
-  })  : _caseId = caseId,
-        _phone = phone,
-        _forwardingAddress = forwardingAddress;
+  }) : _caseId = caseId,
+       _phone = phone,
+       _forwardingAddress = forwardingAddress;
 
   factory ClearanceRequest.fromJson(Map<String, dynamic> json) {
     final stages = (json['stages'] as List? ?? const [])
@@ -171,13 +202,19 @@ class ClearanceRequest {
       caseId: json['id'] as String,
       id: json['requestCode'] as String,
       status: json['status']?.toString() ?? '',
-      submittedAt:
-      DateTime.tryParse(json['submittedAt']?.toString() ?? '')?.toLocal(),
+      submittedAt: DateTime.tryParse(
+        json['submittedAt']?.toString() ?? '',
+      )?.toLocal(),
       lastWorkingDay: DateTime.parse(json['lastWorkingDate'] as String),
       reason: json['reasonForLeaving']?.toString() ?? '',
       remarks: json['employeeRemarks']?.toString() ?? '',
       steps: stages,
       approvals: approvals,
+      issues: (json['issues'] as List? ?? const [])
+          .whereType<Map>()
+          .map((m) => DepartmentIssue.fromJson(Map<String, dynamic>.from(m)))
+          .toList(),
+      certificateId: json['certificateId'] as String?,
       totalStages: count('totalStages'),
       clearedStages: count('clearedStages'),
       outstandingStages: count('outstandingStages'),
@@ -186,26 +223,49 @@ class ClearanceRequest {
   }
 
   int get clearedCount =>
-      steps.where((s) => s.status == StepStatus.cleared).length;
+      steps.where((step) => step.status == StepStatus.cleared).length;
 
-  double get progress => steps.isEmpty ? 0 : clearedCount / steps.length;
+  int get notApplicableCount =>
+      steps.where((step) => step.status == StepStatus.notApplicable).length;
 
-  /// First stage that is not cleared yet (null when everything is cleared).
+  int get evaluatedCount => clearedCount + notApplicableCount;
+
+  int get stageCount => totalStages > steps.length ? totalStages : steps.length;
+
+  double get progress => stageCount == 0 ? 0 : evaluatedCount / stageCount;
+
   DepartmentStep? get currentStep {
+    if (status == 'CANCELLED' || isCompleted) return null;
     for (final step in steps) {
-      if (step.status != StepStatus.cleared) return step;
+      if (!step.isEvaluated) return step;
     }
     return null;
   }
 
-  /// Overall status shown on the dashboard and progress screens.
-  StepStatus get overallStatus {
-    if (steps.isNotEmpty && clearedCount == steps.length) {
-      return StepStatus.cleared;
+  DepartmentIssue? openIssueFor(DepartmentStep step) {
+    for (final issue in issues) {
+      if (issue.stageId == step.id && issue.status == 'OPEN') return issue;
     }
-    if (steps.any((s) => s.status == StepStatus.outstanding)) {
+    return null;
+  }
+
+  bool get isCompleted =>
+      status == 'COMPLETED' &&
+      steps.isNotEmpty &&
+      steps.length == stageCount &&
+      steps.every((step) => !step.isRequired || step.isEvaluated);
+
+  String? get availableCertificateId =>
+      isCompleted && (certificateId?.isNotEmpty ?? false)
+      ? certificateId
+      : null;
+
+  StepStatus get overallStatus {
+    if (isCompleted) return StepStatus.cleared;
+    if (currentStep?.status == StepStatus.outstanding) {
       return StepStatus.outstanding;
     }
+    if (steps.isEmpty) return StepStatus.locked;
     return StepStatus.processing;
   }
 }

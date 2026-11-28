@@ -26,6 +26,12 @@ String? _optStr(Map<String, dynamic> m, String key) {
   return v is String ? v : null;
 }
 
+int _reqInt(Map<String, dynamic> m, String key) {
+  final v = m[key];
+  if (v is int) return v;
+  throw _unexpected();
+}
+
 DateTime? _optDate(Map<String, dynamic> m, String key) {
   final v = m[key];
   return v is String ? DateTime.tryParse(v) : null;
@@ -82,9 +88,26 @@ class DepartmentDto {
   final DepartmentApplicability applicability;
   final DepartmentApiStatus status;
 
-  /// Not shown until Student visibility of remarks is confirmed.
+  /// Backend-approved Student-visible reason (plain text, nullable).
+  /// Show with a plain Text widget only, and only when non-empty.
   final String? remarks;
   final DateTime? updatedAt;
+
+  /// True when the backend has not yet decided if this department applies
+  /// (for example Laboratory). Must never be shown as cleared or exempt.
+  bool get isUndetermined =>
+      applicability == DepartmentApplicability.undetermined;
+
+  /// Explicit backend exemption. Separate from cleared.
+  bool get isExempt =>
+      applicability == DepartmentApplicability.notRequired ||
+          status == DepartmentApiStatus.notRequired;
+
+  /// Reason to display, or null when there is nothing safe to show.
+  String? get visibleReason {
+    final r = remarks?.trim();
+    return (r == null || r.isEmpty) ? null : r;
+  }
 
   factory DepartmentDto.fromJson(dynamic json) {
     final m = _asMap(json);
@@ -142,12 +165,22 @@ class StudentProfileDto {
 // ---------------------------------------------------------------------------
 // Requests
 // ---------------------------------------------------------------------------
+enum RequestParentStatus { inProgress, completed, cancelled, unknown }
+
+RequestParentStatus parseParentStatus(String? raw) => switch (raw) {
+  'IN_PROGRESS' => RequestParentStatus.inProgress,
+  'COMPLETED' => RequestParentStatus.completed,
+  'CANCELLED' => RequestParentStatus.cancelled,
+  _ => RequestParentStatus.unknown,
+};
+
 class StudentRequestSummaryDto {
   const StudentRequestSummaryDto({
     required this.id,
     required this.requestReference,
     required this.reason,
     required this.isActive,
+    this.status = RequestParentStatus.unknown,
     this.submittedAt,
     this.closedAt,
   });
@@ -157,6 +190,7 @@ class StudentRequestSummaryDto {
   final String requestReference;
   final String reason;
   final bool isActive;
+  final RequestParentStatus status;
   final DateTime? submittedAt;
   final DateTime? closedAt;
 
@@ -169,6 +203,7 @@ class StudentRequestSummaryDto {
       requestReference: _reqStr(m, 'requestReference'),
       reason: _reqStr(m, 'reason'),
       isActive: isActive,
+      status: parseParentStatus(_optStr(m, 'status')),
       submittedAt: _optDate(m, 'submittedAt'),
       closedAt: _optDate(m, 'closedAt'),
     );
@@ -214,6 +249,33 @@ class StudentRequestDto {
 // ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
+class StudentProgressDto {
+  const StudentProgressDto({
+    required this.requiredCount,
+    required this.clearedRequiredCount,
+    required this.actionRequiredCount,
+    required this.notRequiredCount,
+    required this.undeterminedCount,
+  });
+
+  final int requiredCount;
+  final int clearedRequiredCount;
+  final int actionRequiredCount;
+  final int notRequiredCount;
+  final int undeterminedCount;
+
+  factory StudentProgressDto.fromJson(dynamic json) {
+    final m = _asMap(json);
+    return StudentProgressDto(
+      requiredCount: _reqInt(m, 'requiredCount'),
+      clearedRequiredCount: _reqInt(m, 'clearedRequiredCount'),
+      actionRequiredCount: _reqInt(m, 'actionRequiredCount'),
+      notRequiredCount: _reqInt(m, 'notRequiredCount'),
+      undeterminedCount: _reqInt(m, 'undeterminedCount'),
+    );
+  }
+}
+
 class StudentDashboardDto {
   const StudentDashboardDto({
     required this.departments,
@@ -227,9 +289,7 @@ class StudentDashboardDto {
   final StudentProfileDto? profile;
   final StudentRequestSummaryDto? activeRequest;
   final List<DepartmentDto> departments;
-
-  /// Shape not final in the contract. Kept raw, not displayed.
-  final Map<String, dynamic>? progress;
+  final StudentProgressDto? progress;
   final int closedRequestCount;
   final StudentRequestSummaryDto? latestClosedRequest;
 
@@ -257,7 +317,7 @@ class StudentDashboardDto {
           ? null
           : StudentRequestSummaryDto.fromJson(active),
       departments: _departments(m['departments']),
-      progress: progress is Map ? Map<String, dynamic>.from(progress) : null,
+      progress: progress == null ? null : StudentProgressDto.fromJson(progress),
       closedRequestCount: closedCount,
       latestClosedRequest: latest,
     );

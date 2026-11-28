@@ -6,8 +6,6 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/routes.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/step_progress_bar.dart';
-import '../../../data/mock_questionnaire.dart';
-import '../../../models/department_questionnaire.dart';
 
 class ReviewScreen extends StatefulWidget {
   const ReviewScreen({super.key});
@@ -19,20 +17,18 @@ class ReviewScreen extends StatefulWidget {
 class _ReviewScreenState extends State<ReviewScreen> {
   bool _confirmed = false;
   bool _submitting = false;
+  String? _submitError;
 
   Future<void> _submit() async {
     // Blocks a second tap while the first request is still running.
     if (_submitting) return;
-    setState(() => _submitting = true);
+    setState(() {
+      _submitting = true;
+      _submitError = null;
+    });
     try {
       final state = context.read<AppState>();
-      if (kMockQuestionnaireSubmit) {
-        // This sprint: local mock only, no network call.
-        await state.submitForHrReview();
-      } else {
-        // Later sprint: real API submit (existing code path).
-        await state.submit();
-      }
+      await state.submit();
       if (!mounted) return;
       Navigator.pushNamedAndRemoveUntil(
         context,
@@ -41,19 +37,44 @@ class _ReviewScreenState extends State<ReviewScreen> {
       );
     } on ApiException catch (e) {
       if (!mounted) return;
-      setState(() => _submitting = false);
-      _showError(e.message);
+      setState(() {
+        _submitting = false;
+        _submitError = _friendlyMessage(e);
+      });
+      // A duplicate means a case already exists. Reload it from the server.
+      if (e.code == 'ACTIVE_CASE_EXISTS') {
+        try {
+          await context.read<AppState>().refreshCases();
+        } catch (_) {}
+      }
     } catch (_) {
       if (!mounted) return;
-      setState(() => _submitting = false);
-      _showError('Could not submit your request. Please try again.');
+      setState(() {
+        _submitting = false;
+        _submitError = 'Could not submit your request. Please try again.';
+      });
     }
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+  /// Clear, safe messages for the errors the backend can return.
+  String _friendlyMessage(ApiException e) {
+    if (e.code == 'WORKFLOW_CONFIGURATION_INVALID' || e.statusCode == 503) {
+      return 'Clearance is not available right now. Please try again later.';
+    }
+    if (e.code == 'ACTIVE_CASE_EXISTS') {
+      return 'You already have an active clearance request.';
+    }
+    // The previous Employee endpoint returns this response for a request
+    // without questionnaire answers. It omits the rejected field.
+    if (e.statusCode == 422 &&
+        e.code == 'VALIDATION_ERROR' &&
+        e.message == 'Invalid request data' &&
+        e.details == null) {
+      return 'The server rejected your clearance request. Ask your administrator '
+          'to check that the server supports the new Employee clearance flow. '
+          'Your details are still here.';
+    }
+    return e.message;
   }
 
   @override
@@ -61,7 +82,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final state = context.read<AppState>();
     final emp = state.employee;
     final draft = state.draft;
-    final answers = state.questionnaire;
     final lastDay = draft.lastWorkingDay;
 
     return Scaffold(
@@ -75,9 +95,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
         title: const Text(
           'Review & Submit',
           style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textDark),
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: AppTheme.textDark,
+          ),
         ),
         bottom: const PreferredSize(
           preferredSize: Size.fromHeight(1),
@@ -89,10 +110,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const StepProgressBar(step: 3),
+            const StepProgressBar(step: 2, total: 2),
             const SizedBox(height: 12),
             const Text(
-              'Step 3 of 3 · Please confirm your details.',
+              'Step 2 of 2 · Please confirm your details.',
               style: TextStyle(fontSize: 12.5, color: AppTheme.textMuted),
             ),
             const SizedBox(height: 18),
@@ -106,70 +127,20 @@ class _ReviewScreenState extends State<ReviewScreen> {
             const SizedBox(height: 20),
             const _Section('PROVIDED BY YOU'),
             _InfoCard([
-              _DetailRow('Last Working Day',
-                  lastDay == null ? 'Not provided' : formatLongDate(lastDay)),
               _DetailRow(
-                  'Reason for Leaving', _valueOr(draft.reason, 'Not provided')),
+                'Last Working Day',
+                lastDay == null ? 'Not provided' : formatLongDate(lastDay),
+              ),
+              _DetailRow(
+                'Reason for Leaving',
+                _valueOr(draft.reason, 'Not provided'),
+              ),
               if (draft.phone.isNotEmpty)
                 _DetailRow('Contact Number', draft.phone),
               if (draft.forwardingAddress.isNotEmpty)
                 _DetailRow('Forwarding Address', draft.forwardingAddress),
               _DetailRow('Remarks', _valueOr(draft.remarks, 'None')),
             ]),
-            const SizedBox(height: 20),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Expanded(
-                  child: _Section('DEPARTMENT APPLICABILITY ANSWERS'),
-                ),
-                TextButton(
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    minimumSize: const Size(0, 28),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  // Goes back to the questionnaire; answers are kept.
-                  onPressed: _submitting ? null : () => Navigator.pop(context),
-                  child: const Text('Edit answers',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.primary)),
-                ),
-              ],
-            ),
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppTheme.border),
-              ),
-              child: Column(
-                children: [
-                  for (var i = 0; i < kDepartmentQuestions.length; i++) ...[
-                    if (i > 0)
-                      const Divider(
-                          height: 1,
-                          thickness: 1,
-                          color: Color(0xFFF1F4F8)),
-                    _AnswerRow(
-                      area: kDepartmentQuestions[i].area,
-                      answer: answers.answerAt(i),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: Text(
-                'Preliminary employee responses, not final department '
-                    'decisions.',
-                style: TextStyle(fontSize: 11.5, color: AppTheme.textMuted),
-              ),
-            ),
             const SizedBox(height: 16),
             InkWell(
               borderRadius: BorderRadius.circular(8),
@@ -188,9 +159,12 @@ class _ReviewScreenState extends State<ReviewScreen> {
                         value: _confirmed,
                         activeColor: AppTheme.primary,
                         side: const BorderSide(
-                            color: Color(0xFF94A3B8), width: 1.5),
+                          color: Color(0xFF94A3B8),
+                          width: 1.5,
+                        ),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(5)),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
                         onChanged: _submitting
                             ? null
                             : (v) => setState(() => _confirmed = v ?? false),
@@ -199,13 +173,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
                     const SizedBox(width: 10),
                     const Expanded(
                       child: Text(
-                        'I confirm that the information and department-related '
-                            'answers provided above are accurate to the best of my '
-                            'knowledge.',
+                        'I confirm that the information above is accurate to '
+                        'the best of my knowledge.',
                         style: TextStyle(
-                            fontSize: 12.5,
-                            height: 1.4,
-                            color: AppTheme.textDark),
+                          fontSize: 12.5,
+                          height: 1.4,
+                          color: AppTheme.textDark,
+                        ),
                       ),
                     ),
                   ],
@@ -226,6 +200,19 @@ class _ReviewScreenState extends State<ReviewScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (_submitError case final message?) ...[
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      message,
+                      style: const TextStyle(
+                        color: AppTheme.danger,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 SizedBox(
                   width: double.infinity,
                   height: 50,
@@ -235,19 +222,26 @@ class _ReviewScreenState extends State<ReviewScreen> {
                       disabledBackgroundColor: const Color(0xFFA3B6EE),
                       disabledForegroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                     onPressed: _confirmed && !_submitting ? _submit : null,
                     child: _submitting
                         ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                        : const Text('Submit Clearance',
-                        style: TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w700)),
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text(
+                            'Submit Clearance',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                   ),
                 ),
                 TextButton(
@@ -255,13 +249,16 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   onPressed: _submitting
                       ? null
                       : () => Navigator.popUntil(
-                      context, ModalRoute.withName(AppRoutes.newClearance)),
+                          context,
+                          ModalRoute.withName(AppRoutes.newClearance),
+                        ),
                   child: const Text(
                     'Edit request details',
                     style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.primary),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primary,
+                    ),
                   ),
                 ),
               ],
@@ -314,8 +311,7 @@ class _InfoCard extends StatelessWidget {
       children: [
         for (var i = 0; i < rows.length; i++) ...[
           if (i > 0)
-            const Divider(
-                height: 1, thickness: 1, color: Color(0xFFF1F4F8)),
+            const Divider(height: 1, thickness: 1, color: Color(0xFFF1F4F8)),
           rows[i],
         ],
       ],
@@ -336,8 +332,7 @@ class _DetailRow extends StatelessWidget {
       children: [
         Text(
           label,
-          style:
-          const TextStyle(fontSize: 12.5, color: AppTheme.textMuted),
+          style: const TextStyle(fontSize: 12.5, color: AppTheme.textMuted),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -345,59 +340,13 @@ class _DetailRow extends StatelessWidget {
             value,
             textAlign: TextAlign.right,
             style: const TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.textDark),
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: AppTheme.textDark,
+            ),
           ),
         ),
       ],
     ),
   );
-}
-
-class _AnswerRow extends StatelessWidget {
-  final String area;
-  final QuestionAnswer? answer;
-  const _AnswerRow({required this.area, required this.answer});
-
-  // Display styling only. Does not decide which departments apply.
-  (Color, Color) get _colors => switch (answer) {
-    QuestionAnswer.yes => (AppTheme.infoBg, AppTheme.primary),
-    QuestionAnswer.notSure =>
-    (const Color(0xFFFFF3E0), const Color(0xFFB45309)),
-    _ => (const Color(0xFFF1F4F8), AppTheme.textMuted),
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final (bg, fg) = _colors;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Text(area,
-                style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textDark)),
-          ),
-          const SizedBox(width: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              answer?.reviewLabel ?? 'Not answered',
-              style: TextStyle(
-                  fontSize: 10.5, fontWeight: FontWeight.w600, color: fg),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

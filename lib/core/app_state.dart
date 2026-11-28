@@ -1,9 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/employee.dart';
 import '../models/clearance_request.dart';
-import '../models/department_questionnaire.dart';
 import '../data/clearance_repository.dart';
-import '../data/mock_questionnaire.dart';
 import '../data/profile_repository.dart';
 import 'auth/auth_repository.dart';
 import 'auth/auth_user.dart';
@@ -51,14 +49,12 @@ class AppState extends ChangeNotifier {
   bool _submitting = false;
   bool get isSubmitting => _submitting;
 
+  int _caseReadSequence = 0;
+  Set<String> _knownCaseIds = {};
+  Set<String>? _casesBeforeUncertainSubmit;
+
   // Form values live here, so they survive moving between screens.
   final ClearanceDraft draft = ClearanceDraft();
-
-  /// Questionnaire answers (local mock, never sent to the backend yet).
-  final QuestionnaireDraft questionnaire = QuestionnaireDraft();
-
-  /// Mock request that ends at Pending HR Verification (UI only).
-  PendingHrRequest? pendingHrRequest;
 
   bool get hasActiveRequest => activeRequest != null;
 
@@ -111,27 +107,29 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
-  /// Loads the employee's cases from the backend.
-  /// Call this when the Progress or Dashboard screen opens.
-  Future<void> refreshCases() async {
+  /// Loads the Employee's saved cases in the backend's newest-first order.
+  Future<void> refreshCases() => _loadCases();
+
+  Future<void> _loadCases({bool notify = true}) async {
+    final read = ++_caseReadSequence;
     final cases = await _clearance.listCases();
-    final open = cases.where((c) => c.status != 'CANCELLED').toList();
-    open.sort((a, b) => _time(b).compareTo(_time(a)));
-    activeRequest = open.isEmpty ? null : open.first;
-    casesError = null;
-    notifyListeners();
+    if (read != _caseReadSequence) return;
+    _rememberCases(cases);
+    if (notify) notifyListeners();
   }
 
-  DateTime _time(ClearanceRequest c) =>
-      c.submittedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+  void _rememberCases(List<ClearanceRequest> cases) {
+    _knownCaseIds = cases.map((item) => item.caseId).toSet();
+    final visible = cases.where((item) => item.status != 'CANCELLED');
+    activeRequest =
+        visible.where((item) => item.status != 'COMPLETED').firstOrNull ??
+        visible.firstOrNull;
+    casesError = null;
+  }
 
   Future<void> _loadCasesQuietly() async {
     try {
-      final cases = await _clearance.listCases();
-      final open = cases.where((c) => c.status != 'CANCELLED').toList();
-      open.sort((a, b) => _time(b).compareTo(_time(a)));
-      activeRequest = open.isEmpty ? null : open.first;
-      casesError = null;
+      await _loadCases(notify: false);
     } on ApiException catch (e) {
       casesError = e.message;
     }
@@ -145,7 +143,10 @@ class AppState extends ChangeNotifier {
       await refreshCases();
       return;
     }
-    activeRequest = await _clearance.getCase(current.caseId);
+    final read = ++_caseReadSequence;
+    final saved = await _clearance.getCase(current.caseId);
+    if (read != _caseReadSequence) return;
+    activeRequest = saved;
     casesError = null;
     notifyListeners();
   }
@@ -169,42 +170,67 @@ class AppState extends ChangeNotifier {
     activeRequest = null;
     casesError = null;
     draft.clear();
-    questionnaire.clear();
-    pendingHrRequest = null;
+    _caseReadSequence++;
+    _knownCaseIds.clear();
+    _casesBeforeUncertainSubmit = null;
   }
 
-  /// Mock submit for this sprint. No network call. Ends at Pending HR.
-  Future<void> submitForHrReview() async {
-    if (_submitting) return;
-    _submitting = true;
-    notifyListeners();
-    try {
-      await Future<void>.delayed(const Duration(milliseconds: 600));
-      pendingHrRequest = PendingHrRequest(
-        reference: kMockRequestReference,
-        submittedAt: DateTime.now(),
-        lastWorkingDay: draft.lastWorkingDay ?? DateTime.now(),
-        likelyApplicable: questionnaire.countOf(QuestionAnswer.yes),
-        reportedNotApplicable: questionnaire.countOf(QuestionAnswer.no),
-        needsVerification: questionnaire.countOf(QuestionAnswer.notSure),
-      );
-      questionnaire.clear();
-      draft.clear();
-    } finally {
-      _submitting = false;
-      notifyListeners();
-    }
-  }
-
-  /// Sends the request to the backend. The case only exists after the
-  /// server confirms it. Any error is thrown to the screen.
+  /// Submits the request and keeps the draft if the server does not confirm it.
   Future<void> submit() async {
     if (_submitting) return;
+
+    final owner = employee;
     _submitting = true;
     notifyListeners();
     try {
-      activeRequest = await _clearance.submit(draft);
-      draft.clear();
+      final previousIds = _casesBeforeUncertainSubmit;
+      if (previousIds != null) {
+        final cases = await _clearance.listCases();
+        if (!identical(employee, owner)) return;
+        _caseReadSequence++;
+        _rememberCases(cases);
+        _casesBeforeUncertainSubmit = null;
+
+        final saved = cases
+            .where(
+              (item) =>
+                  !previousIds.contains(item.caseId) &&
+                  item.status != 'CANCELLED' &&
+                  item.lastWorkingDay == draft.lastWorkingDay &&
+                  item.reason == draft.reason?.trim() &&
+                  item.remarks == draft.remarks.trim(),
+            )
+            .firstOrNull;
+        if (saved != null) {
+          activeRequest = saved;
+          draft.clear();
+          return;
+        }
+        if (activeRequest != null && activeRequest!.status != 'COMPLETED') {
+          throw ApiException(
+            message: 'You already have an active clearance case.',
+            statusCode: 409,
+            code: 'ACTIVE_CASE_EXISTS',
+          );
+        }
+      }
+
+      final caseIdsAtSubmit = Set<String>.of(_knownCaseIds);
+      try {
+        final saved = await _clearance.submit(draft);
+        if (!identical(employee, owner)) return;
+        _caseReadSequence++;
+        activeRequest = saved;
+        _knownCaseIds.add(saved.caseId);
+        casesError = null;
+        draft.clear();
+      } on ApiException catch (e) {
+        if (identical(employee, owner) &&
+            (e.isNetworkError || e.isServerError)) {
+          _casesBeforeUncertainSubmit = caseIdsAtSubmit;
+        }
+        rethrow;
+      }
     } finally {
       _submitting = false;
       notifyListeners();

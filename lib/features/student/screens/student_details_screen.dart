@@ -10,16 +10,33 @@ class StudentDetailsScreen extends StatefulWidget {
   State<StudentDetailsScreen> createState() => _StudentDetailsScreenState();
 }
 
-class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
+class _StudentDetailsScreenState extends State<StudentDetailsScreen>
+    with WidgetsBindingObserver {
   static const _missing = 'Not available';
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // After the first frame, so listeners are not notified during build.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) context.read<StudentState>().loadDetail();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Reload the saved results when the app returns to the foreground.
+  /// A normal GET. It never triggers a check.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    if (lifecycleState == AppLifecycleState.resumed && mounted) {
+      context.read<StudentState>().loadDetail();
+    }
   }
 
   @override
@@ -57,9 +74,13 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
               ),
             ),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                child: _body(context, state),
+              child: RefreshIndicator(
+                onRefresh: () => context.read<StudentState>().loadDetail(),
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                  child: _body(context, state),
+                ),
               ),
             ),
           ],
@@ -71,10 +92,12 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
   Widget _body(BuildContext context, StudentState state) {
     final cs = Theme.of(context).colorScheme;
 
-    if (state.currentRequest == null) {
+    // A request that completed at submit is no longer "active", but its saved
+    // results can still be opened.
+    if (state.displayRequest == null && state.latestClosed == null) {
       return CardBox(
         child: Text(
-          'There is no active request to show.',
+          'There is no request to show.',
           style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
         ),
       );
@@ -88,7 +111,8 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
     if (state.detailLoad == LoadState.error) {
       return CardBox(
         child: ErrorRetry(
-          message: state.detailError ??
+          message:
+          state.detailError ??
               'Could not load the request details. Please try again.',
           onRetry: () => state.loadDetail(),
         ),
@@ -104,10 +128,14 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
       );
     }
 
-    // Departments that reported "action required", straight from the server.
+    // Straight from the server. Undetermined is never listed as cleared.
     final actionNames = [
       for (final dep in d.departments)
         if (dep.status == DepartmentStatus.actionRequired) dep.name,
+    ];
+    final undeterminedNames = [
+      for (final dep in d.departments)
+        if (dep.status == DepartmentStatus.undetermined) dep.name,
     ];
 
     return Column(
@@ -118,10 +146,17 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Overall status',
-                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              Text(
+                'Overall status',
+                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+              ),
               const SizedBox(height: 8),
-              PillBadge(label: d.overallStatus, color: cs.primary),
+              PillBadge(
+                label: d.overallStatus,
+                color: d.overallStatus == 'Completed'
+                    ? const Color(0xFF16A34A)
+                    : cs.primary,
+              ),
             ],
           ),
         ),
@@ -152,7 +187,11 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
               for (var i = 0; i < kClearanceAreas.length; i++)
                 _DepartmentRow(
                   area: kClearanceAreas[i],
-                  item: findDepartment(d.departments, kClearanceAreas[i].name),
+                  item: findDepartment(
+                    d.departments,
+                    kClearanceAreas[i].name,
+                    code: kClearanceAreas[i].code,
+                  ),
                   last: i == kClearanceAreas.length - 1,
                 ),
             ],
@@ -162,11 +201,23 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
         const SectionTitle('Outstanding requirements'),
         CardBox(
           padding: const EdgeInsets.all(14),
-          child: Text(
-            actionNames.isEmpty
-                ? 'No department has reported an action required.'
-                : 'Action required: ${actionNames.join(', ')}.',
-            style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                actionNames.isEmpty
+                    ? 'No department has reported an action required.'
+                    : 'Action required: ${actionNames.join(', ')}.',
+                style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+              ),
+              if (undeterminedNames.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Not yet determined: ${undeterminedNames.join(', ')}.',
+                  style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+                ),
+              ],
+            ],
           ),
         ),
         const SizedBox(height: 16),
@@ -175,14 +226,18 @@ class _StudentDetailsScreenState extends State<StudentDetailsScreen> {
           child: RichText(
             text: TextSpan(
               style: TextStyle(
-                  fontSize: 12.5, color: cs.onPrimaryContainer, height: 1.35),
+                fontSize: 12.5,
+                color: cs.onPrimaryContainer,
+                height: 1.35,
+              ),
               children: const [
                 TextSpan(
                   text: 'Next step after clearance: ',
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
                 TextSpan(
-                  text: 'once you are cleared by all '
+                  text:
+                  'once you are cleared by all '
                       'required areas, take your cleared '
                       'certificate to the Examination '
                       'Department. It verifies the '
@@ -214,6 +269,17 @@ class _DepartmentRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final i = item;
+    final reason = i?.reason;
+
+    final String caption;
+    if (i == null) {
+      caption = 'No data from the server yet';
+    } else if (i.status == DepartmentStatus.undetermined) {
+      caption = 'Whether this department applies has not been decided yet.';
+    } else {
+      caption = i.updateText ?? 'No update yet';
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -253,12 +319,17 @@ class _DepartmentRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  i == null
-                      ? 'No data from the server yet'
-                      : (i.updateText ?? 'No update yet'),
-                  style:
-                  TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
+                  caption,
+                  style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant),
                 ),
+                if (reason != null) ...[
+                  const SizedBox(height: 4),
+                  // Plain text only. The reason comes from the backend.
+                  Text(
+                    reason,
+                    style: TextStyle(fontSize: 12, color: cs.onSurface),
+                  ),
+                ],
               ],
             ),
           ),

@@ -10,28 +10,34 @@ class StepStatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final (label, icon, fg, bg) = switch (status) {
       StepStatus.cleared => (
-      'Cleared',
-      Icons.check_circle_outline,
-      const Color(0xFF16803C),
-      const Color(0xFFE5F5EA),
+        'Cleared',
+        Icons.check_circle_outline,
+        const Color(0xFF16803C),
+        const Color(0xFFE5F5EA),
+      ),
+      StepStatus.notApplicable => (
+        'Not Applicable',
+        Icons.remove_circle_outline,
+        const Color(0xFF475569),
+        const Color(0xFFE9EDF3),
       ),
       StepStatus.processing => (
-      'Processing',
-      Icons.autorenew,
-      AppTheme.primary,
-      const Color(0xFFE6EEFC),
+        'Checking',
+        Icons.autorenew,
+        AppTheme.primary,
+        const Color(0xFFE6EEFC),
       ),
       StepStatus.outstanding => (
-      'Outstanding',
-      Icons.error_outline,
-      const Color(0xFFC62828),
-      const Color(0xFFFDE8E8),
+        'Action Required',
+        Icons.error_outline,
+        const Color(0xFFC62828),
+        const Color(0xFFFDE8E8),
       ),
       StepStatus.locked => (
-      'Locked',
-      Icons.lock_outline,
-      const Color(0xFF64748B),
-      const Color(0xFFE9EDF3),
+        'Pending',
+        Icons.lock_outline,
+        const Color(0xFF64748B),
+        const Color(0xFFE9EDF3),
       ),
     };
 
@@ -49,7 +55,10 @@ class StepStatusBadge extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w600, color: fg),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: fg,
+            ),
           ),
         ],
       ),

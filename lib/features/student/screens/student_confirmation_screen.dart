@@ -3,24 +3,42 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../state/student_state.dart';
 
-class StudentConfirmationScreen extends StatelessWidget {
+class StudentConfirmationScreen extends StatefulWidget {
   const StudentConfirmationScreen({super.key, required this.onGoToTab});
 
   /// Switches the Student bottom-navigation tab after closing this screen.
   final void Function(int) onGoToTab;
 
+  @override
+  State<StudentConfirmationScreen> createState() =>
+      _StudentConfirmationScreenState();
+}
+
+class _StudentConfirmationScreenState extends State<StudentConfirmationScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Reload saved results and progress from the server after a submission.
+    // A normal GET only. Keeps the data already on screen if it fails.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<StudentState>().refreshDashboard(quiet: true);
+      }
+    });
+  }
+
   void _leave(BuildContext context, int tab) {
     Navigator.pop(context);
-    onGoToTab(tab);
+    widget.onGoToTab(tab);
   }
 
   @override
   Widget build(BuildContext context) {
-    // Real values come from the server once the Student API is integrated.
     final result = context.watch<StudentState>().lastSubmission;
     final cs = Theme.of(context).colorScheme;
     final submitted = result != null;
-    const missing = 'Not available yet';
+    final completed = result?.completed ?? false;
+    const missing = 'Not available';
     const green = Color(0xFF16A34A);
 
     return Scaffold(
@@ -53,7 +71,7 @@ class StudentConfirmationScreen extends StatelessWidget {
                       Text(
                         submitted
                             ? 'Request Submitted Successfully'
-                            : 'Submission Not Connected Yet',
+                            : 'No Request Submitted',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 22,
@@ -63,15 +81,19 @@ class StudentConfirmationScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        submitted
-                            ? 'Your clearance request has been received. '
-                            'Track each department on the status screen.'
-                            : 'Your details were reviewed, but submitting '
-                            'to the server is not available yet. '
-                            'No request has been sent.',
+                        !submitted
+                            ? 'No request has been sent.'
+                            : completed
+                            ? 'Your request was processed automatically and '
+                            'is complete. See each department on the '
+                            'status screen.'
+                            : 'Your clearance request has been received. '
+                            'Track each department on the status screen.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                            fontSize: 12.5, color: cs.onSurfaceVariant),
+                          fontSize: 12.5,
+                          color: cs.onSurfaceVariant,
+                        ),
                       ),
                       const SizedBox(height: 22),
                       Container(
@@ -123,11 +145,16 @@ class StudentConfirmationScreen extends StatelessWidget {
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      child: const Text('View Clearance Status',
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w700)),
+                      child: const Text(
+                        'View Clearance Status',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ),
                   TextButton(
@@ -135,7 +162,9 @@ class StudentConfirmationScreen extends StatelessWidget {
                     child: const Text(
                       'Back to Dashboard',
                       style: TextStyle(
-                          fontSize: 12.5, fontWeight: FontWeight.w600),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -149,8 +178,12 @@ class StudentConfirmationScreen extends StatelessWidget {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow(this.label, this.value,
-      {this.last = false, this.mono = false});
+  const _InfoRow(
+      this.label,
+      this.value, {
+        this.last = false,
+        this.mono = false,
+      });
   final String label;
   final String value;
   final bool last;
@@ -169,8 +202,10 @@ class _InfoRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label,
-              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+          Text(
+            label,
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+          ),
           Flexible(
             child: Text(
               value,
