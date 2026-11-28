@@ -349,7 +349,7 @@ void main() {
 
     await tester.pumpWidget(_buildApp(state, route: AppRoutes.progress));
     await tester.pumpAndSettle();
-    final viewIssue = find.widgetWithText(FilledButton, 'View Issue');
+    final viewIssue = find.text('View Issue');
     await tester.scrollUntilVisible(viewIssue, 250);
     await Scrollable.ensureVisible(tester.element(viewIssue), alignment: 0.5);
     await tester.pumpAndSettle();
