@@ -17,11 +17,15 @@ class ReviewScreen extends StatefulWidget {
 class _ReviewScreenState extends State<ReviewScreen> {
   bool _confirmed = false;
   bool _submitting = false;
+  String? _submitError;
 
   Future<void> _submit() async {
     // Blocks a second tap while the first request is still running.
     if (_submitting) return;
-    setState(() => _submitting = true);
+    setState(() {
+      _submitting = true;
+      _submitError = null;
+    });
     try {
       final state = context.read<AppState>();
       await state.submit();
@@ -33,8 +37,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
       );
     } on ApiException catch (e) {
       if (!mounted) return;
-      setState(() => _submitting = false);
-      _showError(_friendlyMessage(e));
+      setState(() {
+        _submitting = false;
+        _submitError = _friendlyMessage(e);
+      });
       // A duplicate means a case already exists. Reload it from the server.
       if (e.code == 'ACTIVE_CASE_EXISTS') {
         try {
@@ -43,8 +49,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
       }
     } catch (_) {
       if (!mounted) return;
-      setState(() => _submitting = false);
-      _showError('Could not submit your request. Please try again.');
+      setState(() {
+        _submitting = false;
+        _submitError = 'Could not submit your request. Please try again.';
+      });
     }
   }
 
@@ -56,13 +64,17 @@ class _ReviewScreenState extends State<ReviewScreen> {
     if (e.code == 'ACTIVE_CASE_EXISTS') {
       return 'You already have an active clearance request.';
     }
+    // The previous Employee endpoint returns this response for a request
+    // without questionnaire answers. It omits the rejected field.
+    if (e.statusCode == 422 &&
+        e.code == 'VALIDATION_ERROR' &&
+        e.message == 'Invalid request data' &&
+        e.details == null) {
+      return 'The server rejected your clearance request. Ask your administrator '
+          'to check that the server supports the new Employee clearance flow. '
+          'Your details are still here.';
+    }
     return e.message;
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -188,6 +200,19 @@ class _ReviewScreenState extends State<ReviewScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (_submitError case final message?) ...[
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      message,
+                      style: const TextStyle(
+                        color: AppTheme.danger,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 SizedBox(
                   width: double.infinity,
                   height: 50,

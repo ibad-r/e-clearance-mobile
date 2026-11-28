@@ -340,6 +340,64 @@ void main() {
     expect(backend.count('POST', '/employee/cases'), 1);
   });
 
+  testWidgets('submit explains a bare Employee 422 and keeps the draft', (
+    tester,
+  ) async {
+    final backend = _FakeBackend();
+    final submissions = <Object?>[];
+    final api = ApiClient(
+      baseUrl: 'http://test/api/v1',
+      httpClient: MockClient((request) async {
+        if (request.method == 'POST' &&
+            request.url.path.endsWith('/employee/cases')) {
+          submissions.add(jsonDecode(request.body));
+          if (submissions.length == 1) {
+            return _json(
+              422,
+              _error('VALIDATION_ERROR', 'Invalid request data'),
+            );
+          }
+        }
+        return backend.handle(request);
+      }),
+    );
+    final state = AppState(
+      apiClient: api,
+      auth: AuthRepository(apiClient: api, tokenStorage: _FakeTokenStorage()),
+    );
+    await state.login(_email, _password);
+    state.draft
+      ..lastWorkingDay = DateTime(2026, 11, 10)
+      ..reason = 'Contract Completion'
+      ..remarks = 'Equipment returned';
+
+    await tester.pumpWidget(_buildApp(state, route: AppRoutes.review));
+    await tester.ensureVisible(find.byType(Checkbox));
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
+    await tester.tap(find.text('Submit Clearance'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('supports the new Employee clearance flow'),
+      findsOneWidget,
+    );
+    expect(state.activeRequest, isNull);
+    expect(state.draft.remarks, 'Equipment returned');
+    expect(submissions, hasLength(1));
+
+    await tester.tap(find.text('Submit Clearance'));
+    await tester.pumpAndSettle();
+
+    final expectedBody = {
+      'lastWorkingDate': '2026-11-10',
+      'reasonForLeaving': 'Contract Completion',
+      'employeeRemarks': 'Equipment returned',
+    };
+    expect(submissions, [expectedBody, expectedBody]);
+    expect(find.text('Request submitted successfully'), findsOneWidget);
+  });
+
   testWidgets('department details refresh using saved backend results', (
     tester,
   ) async {
