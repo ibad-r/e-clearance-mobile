@@ -6,8 +6,6 @@ import '../../../core/network/api_exception.dart';
 import '../../../core/routes.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/step_progress_bar.dart';
-import '../../../data/mock_questionnaire.dart';
-import '../../../models/department_questionnaire.dart';
 
 class ReviewScreen extends StatefulWidget {
   const ReviewScreen({super.key});
@@ -26,13 +24,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     setState(() => _submitting = true);
     try {
       final state = context.read<AppState>();
-      if (kMockQuestionnaireSubmit) {
-        // This sprint: local mock only, no network call.
-        await state.submitForHrReview();
-      } else {
-        // Real API submit: sends the 14 answers to POST /employee/cases.
-        await state.submit();
-      }
+      await state.submit();
       if (!mounted) return;
       Navigator.pushNamedAndRemoveUntil(
         context,
@@ -78,7 +70,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
     final state = context.read<AppState>();
     final emp = state.employee;
     final draft = state.draft;
-    final answers = state.questionnaire;
     final lastDay = draft.lastWorkingDay;
 
     return Scaffold(
@@ -107,10 +98,10 @@ class _ReviewScreenState extends State<ReviewScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const StepProgressBar(step: 3),
+            const StepProgressBar(step: 2, total: 2),
             const SizedBox(height: 12),
             const Text(
-              'Step 3 of 3 · Please confirm your details.',
+              'Step 2 of 2 · Please confirm your details.',
               style: TextStyle(fontSize: 12.5, color: AppTheme.textMuted),
             ),
             const SizedBox(height: 18),
@@ -138,64 +129,6 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 _DetailRow('Forwarding Address', draft.forwardingAddress),
               _DetailRow('Remarks', _valueOr(draft.remarks, 'None')),
             ]),
-            const SizedBox(height: 20),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Expanded(
-                  child: _Section('DEPARTMENT APPLICABILITY ANSWERS'),
-                ),
-                TextButton(
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    minimumSize: const Size(0, 28),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  // Goes back to the questionnaire; answers are kept.
-                  onPressed: _submitting ? null : () => Navigator.pop(context),
-                  child: const Text(
-                    'Edit answers',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.primary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppTheme.border),
-              ),
-              child: Column(
-                children: [
-                  for (var i = 0; i < kDepartmentQuestions.length; i++) ...[
-                    if (i > 0)
-                      const Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: Color(0xFFF1F4F8),
-                      ),
-                    _AnswerRow(
-                      area: kDepartmentQuestions[i].area,
-                      answer: answers.answerAt(i),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: Text(
-                'Preliminary employee responses, not final department '
-                    'decisions.',
-                style: TextStyle(fontSize: 11.5, color: AppTheme.textMuted),
-              ),
-            ),
             const SizedBox(height: 16),
             InkWell(
               borderRadius: BorderRadius.circular(8),
@@ -228,9 +161,8 @@ class _ReviewScreenState extends State<ReviewScreen> {
                     const SizedBox(width: 10),
                     const Expanded(
                       child: Text(
-                        'I confirm that the information and department-related '
-                            'answers provided above are accurate to the best of my '
-                            'knowledge.',
+                        'I confirm that the information above is accurate to '
+                        'the best of my knowledge.',
                         style: TextStyle(
                           fontSize: 12.5,
                           height: 1.4,
@@ -271,20 +203,20 @@ class _ReviewScreenState extends State<ReviewScreen> {
                     onPressed: _confirmed && !_submitting ? _submit : null,
                     child: _submitting
                         ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
                         : const Text(
-                      'Submit Clearance',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                            'Submit Clearance',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                   ),
                 ),
                 TextButton(
@@ -292,9 +224,9 @@ class _ReviewScreenState extends State<ReviewScreen> {
                   onPressed: _submitting
                       ? null
                       : () => Navigator.popUntil(
-                    context,
-                    ModalRoute.withName(AppRoutes.newClearance),
-                  ),
+                          context,
+                          ModalRoute.withName(AppRoutes.newClearance),
+                        ),
                   child: const Text(
                     'Edit request details',
                     style: TextStyle(
@@ -392,56 +324,4 @@ class _DetailRow extends StatelessWidget {
       ],
     ),
   );
-}
-
-class _AnswerRow extends StatelessWidget {
-  final String area;
-  final QuestionAnswer? answer;
-  const _AnswerRow({required this.area, required this.answer});
-
-  // Display styling only. Does not decide which departments apply.
-  (Color, Color) get _colors => switch (answer) {
-    QuestionAnswer.yes => (AppTheme.infoBg, AppTheme.primary),
-    QuestionAnswer.notSure => (const Color(0xFFFFF3E0), const Color(0xFFB45309)),
-    _ => (const Color(0xFFF1F4F8), AppTheme.textMuted),
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final (bg, fg) = _colors;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Text(
-              area,
-              style: const TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w500,
-                color: AppTheme.textDark,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              answer?.reviewLabel ?? 'Not answered',
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-                color: fg,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

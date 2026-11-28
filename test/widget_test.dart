@@ -9,7 +9,6 @@ import 'package:e_clearance_mobile/core/routes.dart';
 import 'package:e_clearance_mobile/core/theme/app_theme.dart';
 import 'package:e_clearance_mobile/data/clearance_repository.dart';
 import 'package:e_clearance_mobile/models/clearance_request.dart';
-import 'package:e_clearance_mobile/models/department_questionnaire.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -86,28 +85,45 @@ Map<String, dynamic> _caseJson() => {
   },
 };
 
-/// What the real backend returns for a new submission that includes the
-/// questionnaire: Pending HR Verification, with no stages and no approvals.
-Map<String, dynamic> _pendingCaseJson(Map<String, dynamic> answers) => {
+Map<String, dynamic> _sequentialCaseJson({
+  int? blockedAt = 2,
+  bool completed = false,
+  String? certificateId,
+}) => {
   ..._caseJson(),
-  'status': 'PENDING_HR_VERIFICATION',
-  'stages': <Map<String, dynamic>>[],
-  'approvals': <Map<String, dynamic>>[],
-  'progress': {
-    'totalStages': 0,
-    'clearedStages': 0,
-    'outstandingStages': 0,
-    'skippedStages': 0,
-  },
-  'questionnaireVersion': 'v1',
-  'questionnaireAnswers': answers,
-  'departmentRecommendation': {
-    'status': 'UNAVAILABLE',
-    'ruleVersion': null,
-    'departments': <Map<String, dynamic>>[],
-  },
-  'hrSelection': null,
-  'confirmedDepartmentIds': <String>[],
+  'status': completed
+      ? 'COMPLETED'
+      : blockedAt == null
+      ? 'IN_PROGRESS'
+      : 'ACTION_REQUIRED',
+  'stages': [
+    for (var i = 14; i >= 1; i--)
+      {
+        'id': 'stage-$i',
+        'departmentName': 'Department $i',
+        'stepOrder': i,
+        'isRequired': true,
+        'status': switch (i) {
+          1 => 'NOT_APPLICABLE',
+          _ when completed => 'CLEARED',
+          _ when i == blockedAt => 'ACTION_REQUIRED',
+          _ when i < (blockedAt ?? 3) => 'CLEARED',
+          3 when blockedAt == null => 'CHECKING',
+          _ => 'PENDING',
+        },
+      },
+  ],
+  'approvals': [],
+  'issues': [
+    if (blockedAt != null && !completed)
+      {
+        'requestStageId': 'stage-$blockedAt',
+        'reason': 'Return the equipment issued to you.',
+        'status': 'OPEN',
+      },
+  ],
+  'certificateId': certificateId,
+  'progress': {'totalStages': 14},
 };
 
 /// Keeps the token in memory, so tests never touch the real secure storage.
@@ -130,18 +146,21 @@ class _FakeTokenStorage extends TokenStorage {
 
 /// A fake backend that behaves like the real API contract.
 class _FakeBackend {
-  _FakeBackend({List<Map<String, dynamic>>? cases}) : cases = cases ?? [];
+  _FakeBackend({
+    List<Map<String, dynamic>>? cases,
+    this.completeOnSubmit = false,
+  }) : cases = cases ?? [];
+
+  final bool completeOnSubmit;
 
   final List<Map<String, dynamic>> cases;
   final List<http.Request> log = [];
 
-  int count(String method, String path) => log
-      .where((r) => r.method == method && r.url.path.endsWith(path))
-      .length;
+  int count(String method, String path) =>
+      log.where((r) => r.method == method && r.url.path.endsWith(path)).length;
 
-  http.Request lastRequest(String method, String path) => log.lastWhere(
-        (r) => r.method == method && r.url.path.endsWith(path),
-  );
+  http.Request lastRequest(String method, String path) =>
+      log.lastWhere((r) => r.method == method && r.url.path.endsWith(path));
 
   Future<http.Response> handle(http.Request r) async {
     log.add(r);
@@ -186,28 +205,10 @@ class _FakeBackend {
 
     if (r.method == 'POST' && path.endsWith('/employee/cases')) {
       final body = jsonDecode(r.body) as Map<String, dynamic>;
-      final answers = body['questionnaireAnswers'];
-
-      // Same rule as the real backend: all 14 keys, exact literals only.
-      if (answers != null) {
-        final valid =
-            answers is Map &&
-                answers.length == kQuestionnaireApiKeys.length &&
-                kQuestionnaireApiKeys.every(answers.containsKey) &&
-                answers.values.every(
-                      (v) => v == 'YES' || v == 'NO' || v == 'NOT_SURE',
-                );
-        if (!valid) {
-          return _json(
-            422,
-            _error('VALIDATION_ERROR', 'Invalid questionnaire answers'),
-          );
-        }
-      }
-
-      final created = answers is Map
-          ? _pendingCaseJson(Map<String, dynamic>.from(answers))
-          : _caseJson();
+      final created = {
+        ..._sequentialCaseJson(completed: completeOnSubmit),
+        ...body,
+      };
       cases.add(created);
       return _json(201, {'data': created});
     }
@@ -216,13 +217,17 @@ class _FakeBackend {
       return _json(200, {'data': cases});
     }
 
+    if (r.method == 'GET' && path.contains('/employee/cases/')) {
+      final id = r.url.pathSegments.last;
+      final saved = cases.where((item) => item['id'] == id).firstOrNull;
+      if (saved != null) return _json(200, {'data': saved});
+    }
+
     return _json(404, _error('NOT_FOUND', 'Not found'));
   }
 
-  ApiClient newClient() => ApiClient(
-    httpClient: MockClient(handle),
-    baseUrl: 'http://test/api/v1',
-  );
+  ApiClient newClient() =>
+      ApiClient(httpClient: MockClient(handle), baseUrl: 'http://test/api/v1');
 
   AppState newState() {
     final api = newClient();
@@ -233,12 +238,12 @@ class _FakeBackend {
   }
 }
 
-Widget _buildApp(AppState state) {
+Widget _buildApp(AppState state, {String route = AppRoutes.login}) {
   return ChangeNotifierProvider<AppState>.value(
     value: state,
     child: MaterialApp(
       theme: AppTheme.light,
-      initialRoute: AppRoutes.login,
+      initialRoute: route,
       routes: AppRoutes.table,
     ),
   );
@@ -248,17 +253,6 @@ ClearanceDraft _draft({String? reason, String remarks = ''}) => ClearanceDraft()
   ..lastWorkingDay = DateTime(2026, 11, 10)
   ..reason = reason ?? 'Contract Completion'
   ..remarks = remarks;
-
-/// Answers all 14 questions, so AppState.submit() is allowed to send.
-void _answerAll(AppState state, {QuestionAnswer answer = QuestionAnswer.no}) {
-  for (var i = 0; i < kQuestionnaireApiKeys.length; i++) {
-    state.questionnaire.setAnswer(i, answer);
-  }
-}
-
-Map<String, QuestionAnswer> _allAnswers() => {
-  for (final k in kQuestionnaireApiKeys) k: QuestionAnswer.no,
-};
 
 void main() {
   group('Login screen', () {
@@ -299,8 +293,8 @@ void main() {
     });
 
     testWidgets('correct login opens the dashboard with the real profile', (
-        tester,
-        ) async {
+      tester,
+    ) async {
       final backend = _FakeBackend();
       await tester.pumpWidget(_buildApp(backend.newState()));
 
@@ -316,6 +310,68 @@ void main() {
       expect(find.text('Start Clearance'), findsOneWidget);
       expect(backend.count('GET', '/employee/profile'), 1);
     });
+  });
+
+  testWidgets('review submits the form and opens sequential progress', (
+    tester,
+  ) async {
+    final backend = _FakeBackend();
+    final state = backend.newState();
+    await state.login(_email, _password);
+    state.draft
+      ..lastWorkingDay = DateTime(2026, 11, 10)
+      ..reason = 'Contract Completion';
+
+    await tester.pumpWidget(_buildApp(state, route: AppRoutes.newClearance));
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+    expect(find.text('Review & Submit'), findsOneWidget);
+    await tester.ensureVisible(find.byType(Checkbox));
+    await tester.tap(find.byType(Checkbox));
+    await tester.pump();
+    await tester.tap(find.text('Submit Clearance'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Request submitted successfully'), findsOneWidget);
+    await tester.tap(find.text('Track Clearance Progress'));
+    await tester.pumpAndSettle();
+    expect(find.text('Clearance Progress'), findsOneWidget);
+    expect(find.text('Stage 2 of 14 · Department 2'), findsOneWidget);
+    expect(backend.count('POST', '/employee/cases'), 1);
+  });
+
+  testWidgets('department details refresh using saved backend results', (
+    tester,
+  ) async {
+    final backend = _FakeBackend(cases: [_sequentialCaseJson()]);
+    final state = backend.newState();
+    await state.login(_email, _password);
+
+    await tester.pumpWidget(_buildApp(state, route: AppRoutes.progress));
+    await tester.pumpAndSettle();
+    final viewIssue = find.widgetWithText(FilledButton, 'View Issue');
+    await tester.scrollUntilVisible(viewIssue, 250);
+    await Scrollable.ensureVisible(tester.element(viewIssue), alignment: 0.5);
+    await tester.pumpAndSettle();
+    await tester.tap(viewIssue);
+    await tester.pumpAndSettle();
+    expect(find.text('Department Details'), findsOneWidget);
+    expect(find.text('Return the equipment issued to you.'), findsOneWidget);
+
+    await tester.tap(find.text('Refresh Status'));
+    await tester.pumpAndSettle();
+    expect(find.text('Action Required'), findsOneWidget);
+
+    backend.cases[0] = _sequentialCaseJson(blockedAt: null);
+    await tester.tap(find.text('Refresh Status'));
+    await tester.pumpAndSettle();
+    expect(find.text('Cleared'), findsOneWidget);
+    expect(find.text('Action Required'), findsNothing);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Department 3'), 200);
+    expect(find.text('Checking'), findsOneWidget);
+    expect(backend.log.where((r) => r.method == 'POST'), hasLength(1));
   });
 
   group('API client and repositories', () {
@@ -338,8 +394,8 @@ void main() {
       final result = await repo.submit(_draft(remarks: ''));
 
       final sent =
-      jsonDecode(backend.lastRequest('POST', '/employee/cases').body)
-      as Map<String, dynamic>;
+          jsonDecode(backend.lastRequest('POST', '/employee/cases').body)
+              as Map<String, dynamic>;
       expect(sent.keys.toSet(), {
         'lastWorkingDate',
         'reasonForLeaving',
@@ -360,122 +416,48 @@ void main() {
       await repo.submit(_draft(remarks: 'Handover done'));
 
       final sent =
-      jsonDecode(backend.lastRequest('POST', '/employee/cases').body)
-      as Map<String, dynamic>;
+          jsonDecode(backend.lastRequest('POST', '/employee/cases').body)
+              as Map<String, dynamic>;
       expect(sent['employeeRemarks'], 'Handover done');
     });
 
-    test('submit sends all 14 questionnaire answers with exact literals',
-            () async {
-          final backend = _FakeBackend();
-          final api = backend.newClient()..authToken = _token;
-          final repo = ApiClearanceRepository(apiClient: api);
+    test(
+      'a reason shorter than 3 characters is rejected before sending',
+      () async {
+        final backend = _FakeBackend();
+        final api = backend.newClient()..authToken = _token;
+        final repo = ApiClearanceRepository(apiClient: api);
 
-          final answers = _allAnswers()
-            ..['hdsDepartment'] = QuestionAnswer.yes
-            ..['oric'] = QuestionAnswer.notSure;
-          await repo.submit(_draft(), questionnaireAnswers: answers);
-
-          final sent =
-          jsonDecode(backend.lastRequest('POST', '/employee/cases').body)
-          as Map<String, dynamic>;
-          // Only these four fields. No IDs, statuses or recommendations.
-          expect(sent.keys.toSet(), {
-            'lastWorkingDate',
-            'reasonForLeaving',
-            'employeeRemarks',
-            'questionnaireAnswers',
-          });
-          final sentAnswers = sent['questionnaireAnswers'] as Map<String, dynamic>;
-          expect(sentAnswers.keys.toSet(), kQuestionnaireApiKeys.toSet());
-          expect(sentAnswers['hdsDepartment'], 'YES');
-          expect(sentAnswers['oric'], 'NOT_SURE');
-          expect(sentAnswers['financeDepartment'], 'NO');
-        });
-
-    test('fewer than 14 answers is rejected before sending', () async {
-      final backend = _FakeBackend();
-      final api = backend.newClient()..authToken = _token;
-      final repo = ApiClearanceRepository(apiClient: api);
-
-      final partial = _allAnswers()..remove('pharmacy');
-
-      await expectLater(
-        repo.submit(_draft(), questionnaireAnswers: partial),
-        throwsA(
-          isA<ApiException>().having(
-                (e) => e.isValidation,
-            'isValidation',
-            true,
-          ),
-        ),
-      );
-      expect(backend.count('POST', '/employee/cases'), 0);
-    });
-
-    test('a reason shorter than 3 characters is rejected before sending',
-            () async {
-          final backend = _FakeBackend();
-          final api = backend.newClient()..authToken = _token;
-          final repo = ApiClearanceRepository(apiClient: api);
-
-          await expectLater(
-            repo.submit(_draft(reason: 'ab')),
-            throwsA(
-              isA<ApiException>().having(
-                    (e) => e.isValidation,
-                'isValidation',
-                true,
-              ),
+        await expectLater(
+          repo.submit(_draft(reason: 'ab')),
+          throwsA(
+            isA<ApiException>().having(
+              (e) => e.isValidation,
+              'isValidation',
+              true,
             ),
-          );
-          expect(backend.count('POST', '/employee/cases'), 0);
-        });
-
-    test('submit is blocked when questions are unanswered and the server is '
-        'not called', () async {
-      final backend = _FakeBackend();
-      final state = backend.newState();
-      await state.login(_email, _password);
-
-      state.draft
-        ..lastWorkingDay = DateTime(2026, 11, 10)
-        ..reason = 'Contract Completion';
-      // Only 13 of 14 answered.
-      for (var i = 0; i < 13; i++) {
-        state.questionnaire.setAnswer(i, QuestionAnswer.no);
-      }
-
-      await expectLater(
-        state.submit(),
-        throwsA(
-          isA<ApiException>().having(
-                (e) => e.isValidation,
-            'isValidation',
-            true,
           ),
-        ),
-      );
-      expect(backend.count('POST', '/employee/cases'), 0);
-      // Nothing was defaulted: the 14th question is still unanswered.
-      expect(state.questionnaire.answerAt(13), isNull);
-    });
+        );
+        expect(backend.count('POST', '/employee/cases'), 0);
+      },
+    );
 
-    test('a second tap on submit is ignored while the first is running',
-            () async {
-          final backend = _FakeBackend();
-          final state = backend.newState();
-          await state.login(_email, _password);
+    test(
+      'a second tap on submit is ignored while the first is running',
+      () async {
+        final backend = _FakeBackend();
+        final state = backend.newState();
+        await state.login(_email, _password);
 
-          state.draft
-            ..lastWorkingDay = DateTime(2026, 11, 10)
-            ..reason = 'Contract Completion';
-          _answerAll(state);
+        state.draft
+          ..lastWorkingDay = DateTime(2026, 11, 10)
+          ..reason = 'Contract Completion';
 
-          await Future.wait([state.submit(), state.submit()]);
+        await Future.wait([state.submit(), state.submit()]);
 
-          expect(backend.count('POST', '/employee/cases'), 1);
-        });
+        expect(backend.count('POST', '/employee/cases'), 1);
+      },
+    );
 
     test('the submitted case is loaded back from the server', () async {
       final backend = _FakeBackend();
@@ -486,7 +468,6 @@ void main() {
       state.draft
         ..lastWorkingDay = DateTime(2026, 11, 10)
         ..reason = 'Contract Completion';
-      _answerAll(state);
       await state.submit();
 
       // Forget the local copy, then reload from the (fake) backend.
@@ -495,95 +476,128 @@ void main() {
 
       expect(state.hasActiveRequest, isTrue);
       expect(state.activeRequest!.id, 'TEST-0001');
-      expect(state.activeRequest!.status, 'PENDING_HR_VERIFICATION');
+      expect(state.activeRequest!.status, 'ACTION_REQUIRED');
+      expect(state.activeRequest!.steps, hasLength(14));
     });
 
-    test('a Pending HR case has no stages and its saved answers reload from '
-        'the server', () async {
-      final backend = _FakeBackend();
+    test('saved stages show where clearance paused and resumed', () async {
+      final backend = _FakeBackend(cases: [_sequentialCaseJson()]);
       final state = backend.newState();
       await state.login(_email, _password);
 
-      state.draft
-        ..lastWorkingDay = DateTime(2026, 11, 10)
-        ..reason = 'Contract Completion';
-      _answerAll(state);
-      state.questionnaire.setAnswer(0, QuestionAnswer.yes); // hdsDepartment
-      await state.submit();
+      var saved = state.activeRequest!;
+      expect(saved.steps, hasLength(14));
+      expect(saved.steps.first.status, StepStatus.notApplicable);
+      expect(saved.currentStep!.department, 'Department 2');
+      expect(saved.currentStep!.status, StepStatus.outstanding);
+      expect(
+        saved.openIssueFor(saved.currentStep!)!.reason,
+        contains('equipment'),
+      );
+      expect(
+        saved.steps.skip(2).every((s) => s.status == StepStatus.locked),
+        isTrue,
+      );
+      expect(saved.evaluatedCount, 1);
+      expect(saved.availableCertificateId, isNull);
 
-      // Right after submit.
-      expect(state.activeRequest!.isPendingHr, isTrue);
-      expect(state.activeRequest!.steps, isEmpty);
-      expect(state.activeRequest!.overallStatus, StepStatus.locked);
-      expect(state.pendingHrRequest, isNotNull);
-      // The form is cleared only after the server confirmed.
-      expect(state.questionnaire.answeredCount, 0);
-
-      // After an app reload, the answers come back from the backend.
-      state.activeRequest = null;
-      await state.refreshCases();
-      final saved = state.activeRequest!;
-      expect(saved.questionnaireAnswers!.length, 14);
-      expect(saved.questionnaireAnswers!['hdsDepartment'], QuestionAnswer.yes);
-      expect(saved.questionnaireAnswers!['pharmacy'], QuestionAnswer.no);
-      expect(state.pendingHrRequest!.likelyApplicable, 1);
-      expect(state.pendingHrRequest!.reportedNotApplicable, 13);
+      backend.cases[0] = _sequentialCaseJson(blockedAt: null);
+      await state.refreshActiveCase();
+      saved = state.activeRequest!;
+      expect(saved.steps[1].status, StepStatus.cleared);
+      expect(saved.currentStep!.department, 'Department 3');
+      expect(saved.currentStep!.status, StepStatus.processing);
+      expect(saved.steps[3].status, StepStatus.locked);
+      expect(backend.count('POST', '/employee/cases'), 0);
     });
 
-    test('after a network failure the cases are reloaded before submitting '
-        'again', () async {
-      final backend = _FakeBackend();
-      var dropNextReply = true;
-      final api = ApiClient(
-        httpClient: MockClient((r) async {
-          if (dropNextReply &&
-              r.method == 'POST' &&
-              r.url.path.endsWith('/employee/cases')) {
-            dropNextReply = false;
-            // The server saved the case, but the reply never arrived.
-            await backend.handle(r);
-            throw http.ClientException('connection lost');
-          }
-          return backend.handle(r);
-        }),
-        baseUrl: 'http://test/api/v1',
-      );
-      final state = AppState(
-        apiClient: api,
-        auth: AuthRepository(
+    test(
+      'a certificate requires completed status and evaluated required stages',
+      () {
+        final inProgress = _sequentialCaseJson(certificateId: 'certificate-1');
+        expect(
+          ClearanceRequest.fromJson(inProgress).availableCertificateId,
+          isNull,
+        );
+        final inconsistent = {...inProgress, 'status': 'COMPLETED'};
+        expect(ClearanceRequest.fromJson(inconsistent).isCompleted, isFalse);
+
+        final completed = _sequentialCaseJson(
+          completed: true,
+          certificateId: 'certificate-1',
+        );
+        final saved = ClearanceRequest.fromJson(completed);
+        expect(saved.isCompleted, isTrue);
+        expect(saved.progress, 1);
+        expect(saved.availableCertificateId, 'certificate-1');
+        expect(
+          ClearanceRequest.fromJson({
+            ...completed,
+            'stages': [],
+          }).availableCertificateId,
+          isNull,
+        );
+        expect(
+          ClearanceRequest.fromJson({
+            ...completed,
+            'certificateId': null,
+          }).availableCertificateId,
+          isNull,
+        );
+      },
+    );
+
+    test(
+      'a lost submit reply recovers a case completed on the server',
+      () async {
+        final backend = _FakeBackend(completeOnSubmit: true);
+        var dropNextReply = true;
+        final api = ApiClient(
+          httpClient: MockClient((r) async {
+            if (dropNextReply &&
+                r.method == 'POST' &&
+                r.url.path.endsWith('/employee/cases')) {
+              dropNextReply = false;
+              // The server saved the case, but the reply never arrived.
+              await backend.handle(r);
+              throw http.ClientException('connection lost');
+            }
+            return backend.handle(r);
+          }),
+          baseUrl: 'http://test/api/v1',
+        );
+        final state = AppState(
           apiClient: api,
-          tokenStorage: _FakeTokenStorage(),
-        ),
-      );
-      await state.login(_email, _password);
-
-      state.draft
-        ..lastWorkingDay = DateTime(2026, 11, 10)
-        ..reason = 'Contract Completion';
-      _answerAll(state);
-
-      await expectLater(
-        state.submit(),
-        throwsA(
-          isA<ApiException>().having(
-                (e) => e.isNetworkError,
-            'isNetworkError',
-            true,
+          auth: AuthRepository(
+            apiClient: api,
+            tokenStorage: _FakeTokenStorage(),
           ),
-        ),
-      );
-      // The employee's answers are kept after a failed submit.
-      expect(state.questionnaire.answeredCount, 14);
+        );
+        await state.login(_email, _password);
 
-      // Retrying finds the saved case and does not create a duplicate.
-      await expectLater(
-        state.submit(),
-        throwsA(
-          isA<ApiException>().having((e) => e.code, 'code', 'ACTIVE_CASE_EXISTS'),
-        ),
-      );
-      expect(backend.count('POST', '/employee/cases'), 1);
-    });
+        state.draft
+          ..lastWorkingDay = DateTime(2026, 11, 10)
+          ..reason = 'Contract Completion';
+
+        await expectLater(
+          state.submit(),
+          throwsA(
+            isA<ApiException>().having(
+              (e) => e.isNetworkError,
+              'isNetworkError',
+              true,
+            ),
+          ),
+        );
+        expect(state.draft.reason, 'Contract Completion');
+
+        await state.submit();
+
+        expect(state.activeRequest!.isCompleted, isTrue);
+        expect(state.draft.reason, isNull);
+        expect(backend.count('POST', '/employee/cases'), 1);
+      },
+    );
 
     test('stages are sorted and show the backend department names', () async {
       final backend = _FakeBackend(cases: [_caseJson()]);
@@ -605,7 +619,7 @@ void main() {
     test('409 ACTIVE_CASE_EXISTS is reported clearly', () async {
       final api = ApiClient(
         httpClient: MockClient(
-              (_) async => _json(
+          (_) async => _json(
             409,
             _error(
               'ACTIVE_CASE_EXISTS',
@@ -624,33 +638,35 @@ void main() {
               .having((e) => e.isActiveCaseExists, 'isActiveCaseExists', true)
               .having(
                 (e) => e.message,
-            'message',
-            'You already have an active clearance request.',
-          ),
+                'message',
+                'You already have an active clearance request.',
+              ),
         ),
       );
     });
 
-    test('an expired token (401) triggers the session-expired callback',
-            () async {
-          final backend = _FakeBackend();
-          var expired = false;
-          final api = backend.newClient()
-            ..authToken = 'old-token'
-            ..onUnauthorized = () => expired = true;
+    test(
+      'an expired token (401) triggers the session-expired callback',
+      () async {
+        final backend = _FakeBackend();
+        var expired = false;
+        final api = backend.newClient()
+          ..authToken = 'old-token'
+          ..onUnauthorized = () => expired = true;
 
-          await expectLater(
-            api.get('/employee/cases'),
-            throwsA(
-              isA<ApiException>().having(
-                    (e) => e.isUnauthorized,
-                'isUnauthorized',
-                true,
-              ),
+        await expectLater(
+          api.get('/employee/cases'),
+          throwsA(
+            isA<ApiException>().having(
+              (e) => e.isUnauthorized,
+              'isUnauthorized',
+              true,
             ),
-          );
-          expect(expired, isTrue);
-        });
+          ),
+        );
+        expect(expired, isTrue);
+      },
+    );
 
     test('Logout button clears state and logs user out', () async {
       final backend = _FakeBackend();
@@ -668,7 +684,7 @@ void main() {
     test('a network failure becomes a clear error', () async {
       final api = ApiClient(
         httpClient: MockClient(
-              (_) async => throw http.ClientException('offline'),
+          (_) async => throw http.ClientException('offline'),
         ),
         baseUrl: 'http://test/api/v1',
       );
@@ -677,7 +693,7 @@ void main() {
         api.get('/employee/cases'),
         throwsA(
           isA<ApiException>().having(
-                (e) => e.isNetworkError,
+            (e) => e.isNetworkError,
             'isNetworkError',
             true,
           ),
@@ -688,7 +704,7 @@ void main() {
     test('a server error (500) is reported as a server error', () async {
       final api = ApiClient(
         httpClient: MockClient(
-              (_) async => _json(500, _error('INTERNAL', 'Server error')),
+          (_) async => _json(500, _error('INTERNAL', 'Server error')),
         ),
         baseUrl: 'http://test/api/v1',
       );
@@ -697,7 +713,7 @@ void main() {
         api.get('/employee/cases'),
         throwsA(
           isA<ApiException>().having(
-                (e) => e.isServerError,
+            (e) => e.isServerError,
             'isServerError',
             true,
           ),

@@ -1,23 +1,25 @@
-import 'department_questionnaire.dart';
-
-enum StepStatus { cleared, processing, outstanding, locked }
+enum StepStatus { cleared, notApplicable, processing, outstanding, locked }
 
 StepStatus _stageStatus(String? s) {
   switch (s) {
     case 'CLEARED':
-    case 'SKIPPED': // a skipped stage does not block clearance
       return StepStatus.cleared;
+    case 'NOT_APPLICABLE':
+    case 'SKIPPED': // Older Employee cases use SKIPPED.
+      return StepStatus.notApplicable;
     case 'CHECKING':
     case 'RECHECKING':
       return StepStatus.processing;
+    case 'ACTION_REQUIRED':
     case 'OUTSTANDING':
       return StepStatus.outstanding;
-    default: // LOCKED
+    default: // PENDING or legacy LOCKED
       return StepStatus.locked;
   }
 }
 
 class DepartmentStep {
+  final String? id;
   final String department;
   final StepStatus status;
   final String? note;
@@ -26,6 +28,7 @@ class DepartmentStep {
   final int? amountDue;
 
   const DepartmentStep({
+    this.id,
     required this.department,
     required this.status,
     this.note,
@@ -34,12 +37,16 @@ class DepartmentStep {
     this.amountDue,
   });
 
+  bool get isEvaluated =>
+      status == StepStatus.cleared || status == StepStatus.notApplicable;
+
   /// Example: PKR 4,500
   String? get amountLabel =>
       amountDue == null ? null : 'PKR ${_withCommas(amountDue!)}';
 
   factory DepartmentStep.fromJson(Map<String, dynamic> json) {
     return DepartmentStep(
+      id: json['id'] as String?,
       department: json['departmentName']?.toString() ?? 'Department',
       status: _stageStatus(json['status']?.toString()),
       note: json['outstandingNote']?.toString(),
@@ -79,73 +86,26 @@ class ApprovalStep {
   }
 }
 
-/// HR confirmation metadata. Null on the case until HR has confirmed.
-class HrSelection {
-  const HrSelection({this.verifiedAt, this.selectionRevision = 0});
-
-  final DateTime? verifiedAt;
-  final int selectionRevision;
-
-  factory HrSelection.fromJson(Map<String, dynamic> json) => HrSelection(
-    verifiedAt: DateTime.tryParse(json['verifiedAt']?.toString() ?? '')
-        ?.toLocal(),
-    selectionRevision: (json['selectionRevision'] as num?)?.toInt() ?? 0,
-  );
-}
-
-/// A department the backend suggests. Advice only, never a requirement.
-class RecommendedDepartment {
-  const RecommendedDepartment({
-    required this.departmentId,
-    required this.departmentCode,
-    required this.departmentName,
-    this.reason,
+class DepartmentIssue {
+  const DepartmentIssue({
+    required this.stageId,
+    required this.status,
+    required this.reason,
   });
 
-  final String departmentId;
-  final String departmentCode;
-  final String departmentName;
+  final String stageId;
+  final String status;
   final String? reason;
 
-  factory RecommendedDepartment.fromJson(Map<String, dynamic> json) =>
-      RecommendedDepartment(
-        departmentId: json['departmentId']?.toString() ?? '',
-        departmentCode: json['departmentCode']?.toString() ?? '',
-        departmentName: json['departmentName']?.toString() ?? '',
-        reason: json['reason']?.toString(),
+  factory DepartmentIssue.fromJson(Map<String, dynamic> json) =>
+      DepartmentIssue(
+        stageId: json['requestStageId']?.toString() ?? '',
+        status: json['status']?.toString() ?? '',
+        reason: json['reason'] as String?,
       );
 }
 
-/// Parsed so nothing breaks, but NOT shown on the Employee screens.
-/// Recommendations must never be displayed as confirmed requirements.
-class DepartmentRecommendation {
-  const DepartmentRecommendation({
-    required this.status,
-    this.ruleVersion,
-    this.departments = const [],
-  });
-
-  /// AVAILABLE or UNAVAILABLE.
-  final String status;
-  final String? ruleVersion;
-  final List<RecommendedDepartment> departments;
-
-  factory DepartmentRecommendation.fromJson(Map<String, dynamic> json) {
-    final list = (json['departments'] as List? ?? const [])
-        .whereType<Map>()
-        .map((m) =>
-        RecommendedDepartment.fromJson(Map<String, dynamic>.from(m)))
-        .toList();
-    return DepartmentRecommendation(
-      status: json['status']?.toString() ?? 'UNAVAILABLE',
-      ruleVersion: json['ruleVersion']?.toString(),
-      departments: list,
-    );
-  }
-}
-
-/// What the employee types into the form. The form values and the
-/// questionnaire answers are sent to the server. Nothing else.
+/// What the employee types into the request form.
 class ClearanceDraft {
   DateTime? lastWorkingDay;
   String? reason;
@@ -166,8 +126,6 @@ class ClearanceDraft {
 
 /// A real clearance case returned by the backend.
 class ClearanceRequest {
-  static const pendingHrStatus = 'PENDING_HR_VERIFICATION';
-
   final String _caseId;
 
   /// Database ID of the case (used for GET /employee/cases/:caseId).
@@ -176,7 +134,7 @@ class ClearanceRequest {
   /// The request code shown to the user (from the backend `requestCode`).
   final String id;
 
-  /// Backend case status, e.g. IN_PROGRESS or PENDING_HR_VERIFICATION.
+  /// Backend case status, e.g. IN_PROGRESS or ACTION_REQUIRED.
   final String status;
 
   final DateTime? submittedAt;
@@ -185,23 +143,14 @@ class ClearanceRequest {
   final String remarks;
   final List<DepartmentStep> steps;
   final List<ApprovalStep> approvals;
+  final List<DepartmentIssue> issues;
+  final String? certificateId;
 
   /// Progress counts exactly as sent by the backend.
   final int totalStages;
   final int clearedStages;
   final int outstandingStages;
   final int skippedStages;
-
-  /// Null on old cases submitted before the questionnaire existed.
-  final String? questionnaireVersion;
-  final Map<String, QuestionAnswer>? questionnaireAnswers;
-
-  /// Parsed only. Never displayed on the Employee screens.
-  final DepartmentRecommendation? recommendation;
-
-  /// Null until HR confirms the applicable departments.
-  final HrSelection? hrSelection;
-  final List<String> confirmedDepartmentIds;
 
   final String _phone;
   final String _forwardingAddress;
@@ -219,20 +168,17 @@ class ClearanceRequest {
     required this.remarks,
     required this.steps,
     this.approvals = const [],
+    this.issues = const [],
+    this.certificateId,
     this.totalStages = 0,
     this.clearedStages = 0,
     this.outstandingStages = 0,
     this.skippedStages = 0,
-    this.questionnaireVersion,
-    this.questionnaireAnswers,
-    this.recommendation,
-    this.hrSelection,
-    this.confirmedDepartmentIds = const [],
     String phone = '',
     String forwardingAddress = '',
-  })  : _caseId = caseId,
-        _phone = phone,
-        _forwardingAddress = forwardingAddress;
+  }) : _caseId = caseId,
+       _phone = phone,
+       _forwardingAddress = forwardingAddress;
 
   factory ClearanceRequest.fromJson(Map<String, dynamic> json) {
     final stages = (json['stages'] as List? ?? const [])
@@ -252,81 +198,74 @@ class ClearanceRequest {
         : const <String, dynamic>{};
     int count(String key) => (progress[key] as num?)?.toInt() ?? 0;
 
-    // Questionnaire answers: only exact YES / NO / NOT_SURE are accepted.
-    Map<String, QuestionAnswer>? answers;
-    final rawAnswers = json['questionnaireAnswers'];
-    if (rawAnswers is Map) {
-      answers = {};
-      rawAnswers.forEach((k, v) {
-        final a = questionAnswerFromApi(v?.toString());
-        if (a != null) answers![k.toString()] = a;
-      });
-    }
-
-    final rawRecommendation = json['departmentRecommendation'];
-    final rawSelection = json['hrSelection'];
-
     return ClearanceRequest(
       caseId: json['id'] as String,
       id: json['requestCode'] as String,
       status: json['status']?.toString() ?? '',
-      submittedAt:
-      DateTime.tryParse(json['submittedAt']?.toString() ?? '')?.toLocal(),
+      submittedAt: DateTime.tryParse(
+        json['submittedAt']?.toString() ?? '',
+      )?.toLocal(),
       lastWorkingDay: DateTime.parse(json['lastWorkingDate'] as String),
       reason: json['reasonForLeaving']?.toString() ?? '',
       remarks: json['employeeRemarks']?.toString() ?? '',
       steps: stages,
       approvals: approvals,
+      issues: (json['issues'] as List? ?? const [])
+          .whereType<Map>()
+          .map((m) => DepartmentIssue.fromJson(Map<String, dynamic>.from(m)))
+          .toList(),
+      certificateId: json['certificateId'] as String?,
       totalStages: count('totalStages'),
       clearedStages: count('clearedStages'),
       outstandingStages: count('outstandingStages'),
       skippedStages: count('skippedStages'),
-      questionnaireVersion: json['questionnaireVersion']?.toString(),
-      questionnaireAnswers: answers,
-      recommendation: rawRecommendation is Map
-          ? DepartmentRecommendation.fromJson(
-          Map<String, dynamic>.from(rawRecommendation))
-          : null,
-      hrSelection: rawSelection is Map
-          ? HrSelection.fromJson(Map<String, dynamic>.from(rawSelection))
-          : null,
-      confirmedDepartmentIds:
-      (json['confirmedDepartmentIds'] as List? ?? const [])
-          .map((e) => e.toString())
-          .toList(),
     );
   }
 
-  /// True while HR has not yet confirmed which departments apply.
-  /// Stages are empty in this state. That is NOT a completed clearance.
-  bool get isPendingHr => status == pendingHrStatus;
-
-  /// True only after HR confirmed (or on old cases that already have stages).
-  bool get hasConfirmedStages => steps.isNotEmpty;
-
   int get clearedCount =>
-      steps.where((s) => s.status == StepStatus.cleared).length;
+      steps.where((step) => step.status == StepStatus.cleared).length;
 
-  /// 0 when there are no stages. Zero never means complete.
-  double get progress => steps.isEmpty ? 0 : clearedCount / steps.length;
+  int get notApplicableCount =>
+      steps.where((step) => step.status == StepStatus.notApplicable).length;
 
-  /// First stage that is not cleared yet (null when everything is cleared).
+  int get evaluatedCount => clearedCount + notApplicableCount;
+
+  int get stageCount => totalStages > steps.length ? totalStages : steps.length;
+
+  double get progress => stageCount == 0 ? 0 : evaluatedCount / stageCount;
+
   DepartmentStep? get currentStep {
+    if (status == 'CANCELLED' || isCompleted) return null;
     for (final step in steps) {
-      if (step.status != StepStatus.cleared) return step;
+      if (!step.isEvaluated) return step;
     }
     return null;
   }
 
-  /// Overall status shown on the dashboard and progress screens.
-  /// With no stages (for example Pending HR) nothing has started, so the
-  /// status is locked, never processing and never cleared.
+  DepartmentIssue? openIssueFor(DepartmentStep step) {
+    for (final issue in issues) {
+      if (issue.stageId == step.id && issue.status == 'OPEN') return issue;
+    }
+    return null;
+  }
+
+  bool get isCompleted =>
+      status == 'COMPLETED' &&
+      steps.isNotEmpty &&
+      steps.length == stageCount &&
+      steps.every((step) => !step.isRequired || step.isEvaluated);
+
+  String? get availableCertificateId =>
+      isCompleted && (certificateId?.isNotEmpty ?? false)
+      ? certificateId
+      : null;
+
   StepStatus get overallStatus {
-    if (steps.isEmpty) return StepStatus.locked;
-    if (clearedCount == steps.length) return StepStatus.cleared;
-    if (steps.any((s) => s.status == StepStatus.outstanding)) {
+    if (isCompleted) return StepStatus.cleared;
+    if (currentStep?.status == StepStatus.outstanding) {
       return StepStatus.outstanding;
     }
+    if (steps.isEmpty) return StepStatus.locked;
     return StepStatus.processing;
   }
 }
